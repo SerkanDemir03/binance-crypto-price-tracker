@@ -1,17 +1,17 @@
 #import os
-import requests                       #> pip install requests
+import requests                      
 import psycopg2
 from datetime import datetime
-from zoneinfo import ZoneInfo         #> pip install zoneinfo
+import pytz        
 
-psql_password = 12345678
+psql_password = "12345678"
 
 db_config = {
     "host": "localhost",
     "port": 5432,
     "database": "postgres",
     "user":  "postgres",
-    "password": 12345678
+    "password": "12345678"
 }
 
 symbols = [
@@ -43,7 +43,7 @@ def create_table(cursor, table_name="tbl_binance2_staj"):
     );
     """
     cursor.execute(create_query)
-    print(f"[✓] Tablo '{table_name}' oluşturuldu veya zaten mevcut.")
+    print(f"[OK] Tablo '{table_name}' oluşturuldu veya zaten mevcut.")
 
 
 try:
@@ -61,13 +61,14 @@ try:
             data = response.json()
             name = data['symbol']
             price = float(data['price'])
-            now = datetime.now(ZoneInfo("Europe/Istanbul"))
+            istanbul_tz = pytz.timezone("Europe/Istanbul")
+            now = datetime.now(istanbul_tz)
             cursor.execute("""
                 INSERT INTO tbl_binance2_staj (name, price, binancetime)
                 VALUES (%s, %s, %s);
             """, (name, price, now))
 
-            print(f"[✓] {name} verisi eklendi: {price}")
+            print(f"[OK] {name} verisi eklendi: {price}")
         elif response.status_code == 401:
             print(f"[!] {symbol}: Yetkisiz erişim (401). API kimlik doğrulaması gerekebilir.")
         elif response.status_code == 429:
