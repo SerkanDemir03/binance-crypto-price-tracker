@@ -11,7 +11,7 @@ if not psql_password:
 db_config = {
     "host": "localhost",  #127.0.0.1
     "port": 5432,
-    "database": "denemedb",
+    "database": "postgres",
     "user": "postgres",
     "password": psql_password
 }
