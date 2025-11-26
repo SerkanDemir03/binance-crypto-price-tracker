@@ -11,6 +11,11 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   min-height: 100vh;
+  transition: background-color 0.3s ease;
+}
+
+.dark body {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
 }
 
 code {
@@ -25,6 +30,10 @@ code {
 
 ::-webkit-scrollbar-track {
   background: #f1f1f1;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #1e293b;
 }
 
 ::-webkit-scrollbar-thumb {

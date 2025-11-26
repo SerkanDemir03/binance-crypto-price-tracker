@@ -3,7 +3,7 @@ import { useQuery } from 'react-query'
 import { cryptoAPI } from '../../services/api'
 import LoadingSpinner from '../../components/Common/LoadingSpinner'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { ArrowLeft, TrendingUp, TrendingDown } from 'lucide-react'
+import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 
@@ -13,11 +13,16 @@ const CryptoDetailPage = () => {
   const [limit, setLimit] = useState(100)
 
   // Get latest price
-  const { data: latestPriceData, isLoading: isLoadingPrice } = useQuery(
+  const { data: latestPriceData, isLoading: isLoadingPrice, isError: isPriceError, error: priceError } = useQuery(
     ['latestPrice', symbol],
     () => cryptoAPI.getLatestPriceFromDB(symbol),
     {
       enabled: !!symbol,
+      retry: 2,
+      retryDelay: 1000,
+      staleTime: 30000, // 30 saniye cache kullan
+      cacheTime: 300000, // 5 dakika cache'te tut
+      keepPreviousData: true, // Önceki verileri göster
     }
   )
 
@@ -31,11 +36,16 @@ const CryptoDetailPage = () => {
   )
 
   // Get price history
-  const { data: historyData, isLoading: isLoadingHistory } = useQuery(
+  const { data: historyData, isLoading: isLoadingHistory, isError: isHistoryError, error: historyError, refetch: refetchHistory } = useQuery(
     ['priceHistory', symbol, limit],
     () => cryptoAPI.getPriceHistory(symbol, limit),
     {
       enabled: !!symbol,
+      retry: 2,
+      retryDelay: 1000,
+      staleTime: 30000, // 30 saniye cache kullan
+      cacheTime: 300000, // 5 dakika cache'te tut
+      keepPreviousData: true, // Önceki verileri göster
     }
   )
 
@@ -64,57 +74,64 @@ const CryptoDetailPage = () => {
     return symbol?.replace('USDT', '') || symbol
   }
 
-  // Prepare chart data
-  const chartData = historyData?.data?.data
-    ?.map((item) => ({
-      time: formatDate(item.binancetime),
-      price: parseFloat(item.price),
-      date: new Date(item.binancetime).toLocaleTimeString('tr-TR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-    }))
-    .reverse() || []
+  // Prepare chart data - hata durumunda boş array döndür
+  const chartData = (historyData?.data?.data && Array.isArray(historyData.data.data) && historyData.data.data.length > 0)
+    ? historyData.data.data
+        .map((item) => ({
+          time: formatDate(item.binancetime),
+          price: parseFloat(item.price),
+          date: new Date(item.binancetime).toLocaleTimeString('tr-TR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+        }))
+        .reverse()
+    : []
 
   const latestPrice = latestPriceData?.data?.data
   const stats = statsData?.data?.data
 
-  if (isLoadingPrice || isLoadingHistory) {
+  // İlk yüklemede sadece loading göster (cache'de veri varsa göster)
+  if ((isLoadingPrice || isLoadingHistory) && !latestPriceData && !historyData) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <LoadingSpinner size="xl" />
+      <div className="flex flex-col items-center justify-center h-96 animate-fade-in">
+        <div className="relative">
+          <div className="absolute inset-0 bg-primary-200 dark:bg-primary-800 rounded-full blur-2xl opacity-50 animate-pulse-slow"></div>
+          <LoadingSpinner size="xl" />
+        </div>
+        <p className="mt-6 text-gray-600 dark:text-gray-300 font-medium animate-pulse">Veriler yükleniyor...</p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-center space-x-4">
         <button
           onClick={() => navigate('/')}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
         >
-          <ArrowLeft className="w-5 h-5 text-gray-600" />
+          <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
         </button>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
             {getCryptoName(symbol)}
           </h1>
-          <p className="text-gray-600">{symbol}</p>
+          <p className="text-gray-600 dark:text-gray-400">{symbol}</p>
         </div>
       </div>
 
       {/* Current Price Card */}
       {latestPrice && (
-        <div className="bg-white rounded-xl shadow-md p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 border-2 border-gray-100 dark:border-gray-700">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500 mb-1">Güncel Fiyat</p>
-              <p className="text-4xl font-bold text-gray-900">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Güncel Fiyat</p>
+              <p className="text-4xl font-bold text-gray-900 dark:text-gray-100">
                 ${formatPrice(latestPrice.price)}
               </p>
-              <p className="text-sm text-gray-500 mt-2">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                 {formatDate(latestPrice.binancetime)}
               </p>
             </div>
@@ -147,27 +164,27 @@ const CryptoDetailPage = () => {
       {/* 24h Statistics */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg shadow p-4">
-            <p className="text-sm text-gray-500 mb-1">Açılış Fiyatı</p>
-            <p className="text-xl font-bold text-gray-900">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-4 border border-gray-100 dark:border-gray-700">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Açılış Fiyatı</p>
+            <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
               ${formatPrice(stats.openPrice)}
             </p>
           </div>
-          <div className="bg-white rounded-lg shadow p-4">
-            <p className="text-sm text-gray-500 mb-1">En Yüksek</p>
-            <p className="text-xl font-bold text-green-600">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-4 border border-gray-100 dark:border-gray-700">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">En Yüksek</p>
+            <p className="text-xl font-bold text-green-600 dark:text-green-400">
               ${formatPrice(stats.highPrice)}
             </p>
           </div>
-          <div className="bg-white rounded-lg shadow p-4">
-            <p className="text-sm text-gray-500 mb-1">En Düşük</p>
-            <p className="text-xl font-bold text-red-600">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-4 border border-gray-100 dark:border-gray-700">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">En Düşük</p>
+            <p className="text-xl font-bold text-red-600 dark:text-red-400">
               ${formatPrice(stats.lowPrice)}
             </p>
           </div>
-          <div className="bg-white rounded-lg shadow p-4">
-            <p className="text-sm text-gray-500 mb-1">Hacim</p>
-            <p className="text-xl font-bold text-gray-900">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-4 border border-gray-100 dark:border-gray-700">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Hacim</p>
+            <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
               {formatPrice(stats.volume)}
             </p>
           </div>
@@ -175,13 +192,13 @@ const CryptoDetailPage = () => {
       )}
 
       {/* Chart */}
-      <div className="bg-white rounded-xl shadow-md p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-gray-900/50 p-6 border-2 border-gray-100 dark:border-gray-700">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-gray-900">Fiyat Geçmişi</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Fiyat Geçmişi</h2>
           <select
             value={limit}
             onChange={(e) => setLimit(parseInt(e.target.value))}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
           >
             <option value={50}>Son 50 Kayıt</option>
             <option value={100}>Son 100 Kayıt</option>
@@ -190,11 +207,43 @@ const CryptoDetailPage = () => {
           </select>
         </div>
 
-        {chartData.length === 0 ? (
-          <div className="h-96 flex items-center justify-center bg-gray-50 rounded-lg">
+        {isLoadingHistory ? (
+          <div className="h-96 flex items-center justify-center bg-gray-50 dark:bg-gray-700 rounded-lg">
+            <div className="text-center">
+              <LoadingSpinner size="lg" />
+              <p className="text-gray-600 dark:text-gray-300 mt-4">Veriler yükleniyor...</p>
+            </div>
+          </div>
+        ) : isHistoryError ? (
+          <div className="h-96 flex items-center justify-center bg-red-50 dark:bg-red-900/20 rounded-lg border-2 border-red-200 dark:border-red-800">
+            <div className="text-center">
+              <div className="text-4xl mb-4">⚠️</div>
+              <p className="text-red-600 dark:text-red-400 font-semibold mb-2">Veri yüklenemedi</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                {historyError?.response?.data?.message || historyError?.message || 'Veritabanından veri çekilirken bir hata oluştu.'}
+              </p>
+              <button
+                onClick={() => refetchHistory()}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors"
+              >
+                Tekrar Dene
+              </button>
+            </div>
+          </div>
+        ) : chartData.length === 0 ? (
+          <div className="h-96 flex items-center justify-center bg-gray-50 dark:bg-gray-700 rounded-lg">
             <div className="text-center">
               <div className="text-4xl mb-4">📊</div>
-              <p className="text-gray-600">Veri bulunamadı</p>
+              <p className="text-gray-600 dark:text-gray-300 font-semibold mb-2">Veri bulunamadı</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Bu coin için henüz fiyat geçmişi kaydedilmemiş.
+              </p>
+              <button
+                onClick={() => refetchHistory()}
+                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-semibold transition-colors"
+              >
+                Yenile
+              </button>
             </div>
           </div>
         ) : (

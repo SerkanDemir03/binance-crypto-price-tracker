@@ -21,7 +21,7 @@ app.use(cors({
   credentials: true
 }));
 
-// Rate limiting
+// Rate limiting - Genel API limiti
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 dakika
   max: 100, // limit each IP to 100 requests per windowMs

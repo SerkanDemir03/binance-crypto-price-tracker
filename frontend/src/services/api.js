@@ -30,9 +30,20 @@ api.interceptors.response.use(
       errorMessage = error.message || 'Bilinmeyen bir hata oluştu'
     }
     
-    // Tüm hataları göster (sadece kritik olanlar değil)
+    // 429 (Rate Limit) hatalarını sessizce geç - hiçbir toast gösterme
     const status = error.response?.status
-    if (status >= 400) {
+    if (status === 429) {
+      // Rate limit hatası - sessizce geç, hiçbir toast gösterme
+      console.warn('Rate limit hatası (429) - Cache\'deki veriler kullanılacak:', {
+        url: error.config?.url,
+        method: error.config?.method
+      })
+      // Toast gösterme, sadece reject et (cache'deki veriler gösterilecek)
+      return Promise.reject(error)
+    }
+    
+    // Diğer hataları göster (429 hariç)
+    if (status >= 400 && status !== 429) {
       toast.error(errorMessage)
       console.error('API Error:', {
         message: errorMessage,
@@ -59,7 +70,13 @@ export const cryptoAPI = {
   get24hStats: (symbol) => api.get(`/crypto/stats/${symbol}`),
   
   // Get all latest prices from database
-  getLatestPricesFromDB: () => api.get('/crypto/db/prices'),
+  getLatestPricesFromDB: (customSymbols = null) => {
+    const params = customSymbols ? { customSymbols: customSymbols.join(',') } : {}
+    return api.get('/crypto/db/prices', { 
+      params,
+      timeout: 10000 // 10 saniye timeout
+    })
+  },
   
   // Get latest price by symbol from database
   getLatestPriceFromDB: (symbol) => api.get(`/crypto/db/prices/${symbol}`),
@@ -72,6 +89,18 @@ export const cryptoAPI = {
     return api.get(`/crypto/db/history/${symbol}`, { params })
   },
   
+  // Get all price histories in batch (optimized)
+  getAllPriceHistories: (limit = 20, customSymbols = null) => {
+    const params = { limit }
+    if (customSymbols && Array.isArray(customSymbols) && customSymbols.length > 0) {
+      params.customSymbols = customSymbols.join(',')
+    }
+    return api.get('/crypto/db/histories', { 
+      params,
+      timeout: 15000 // 15 saniye timeout (grafik verileri için)
+    })
+  },
+  
   // Get statistics
   getStatistics: (symbol = null) => {
     const params = symbol ? { symbol } : {}
@@ -79,7 +108,39 @@ export const cryptoAPI = {
   },
   
   // Fetch and save prices
-  fetchAndSavePrices: () => api.post('/crypto/fetch'),
+  fetchAndSavePrices: (provider = 'coingecko', customSymbols = null) => {
+    const body = customSymbols ? { customSymbols } : {}
+    return api.post('/crypto/fetch', body, { 
+      params: { provider } 
+    })
+  },
+  
+  // Coin management
+  searchCoins: (query, limit = 20) => api.get('/crypto/coins/search', { 
+    params: { query, limit } 
+  }),
+  
+  validateCoin: (symbol, saveToDb = false) => api.get('/crypto/coins/validate', { 
+    params: { symbol, saveToDb: saveToDb.toString() } 
+  }),
+  
+  // Coin ID ile direkt fiyat çekme (arama sonuçlarından gelen coin'ler için)
+  getPriceByCoinId: (coinId, symbol, saveToDb = false) => api.post('/crypto/coins/price-by-id', {
+    coinId,
+    symbol,
+    saveToDb
+  }),
+  
+  getPricesByCustomSymbols: (symbols) => api.post('/crypto/coins/prices', { symbols }),
+  
+  // Database status
+  checkDatabaseStatus: () => api.get('/crypto/health/database-status'),
+  
+  // Database details (for management panel)
+  getDatabaseDetails: () => api.get('/crypto/database/details'),
+  
+  // Coin silme (veritabanından)
+  deleteCoin: (symbol) => api.delete('/crypto/coins/delete', { data: { symbol } }),
 }
 
 export default api
