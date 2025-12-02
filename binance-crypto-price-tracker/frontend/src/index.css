@@ -1,0 +1,235 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: 
+    /* Deep layer - base gradient */
+    linear-gradient(135deg, #f8fafc 0%, #e2e8f0 25%, #cbd5e1 50%, #e2e8f0 75%, #f8fafc 100%),
+    /* Mid layer - radial gradients for depth */
+    radial-gradient(ellipse at 20% 30%, rgba(14, 165, 233, 0.15) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 70%, rgba(139, 92, 246, 0.15) 0%, transparent 60%),
+    radial-gradient(ellipse at 50% 50%, rgba(236, 72, 153, 0.1) 0%, transparent 70%),
+    /* Top layer - subtle texture */
+    linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
+  background-attachment: fixed;
+  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+  min-height: 100vh;
+  transition: background-color 0.3s ease;
+  position: relative;
+  perspective: 1000px;
+}
+
+/* Grid pattern layer - creates depth */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    /* Primary grid */
+    linear-gradient(rgba(14, 165, 233, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(14, 165, 233, 0.08) 1px, transparent 1px),
+    /* Secondary grid for depth */
+    linear-gradient(rgba(139, 92, 246, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139, 92, 246, 0.05) 1px, transparent 1px);
+  background-size: 
+    80px 80px,
+    80px 80px,
+    40px 40px,
+    40px 40px;
+  background-position: 
+    0 0,
+    0 0,
+    0 0,
+    0 0;
+  pointer-events: none;
+  opacity: 0.6;
+  z-index: 0;
+  transform: translateZ(-100px) scale(1.1);
+}
+
+/* Hexagon pattern overlay for more depth */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='hexagons' width='100' height='100' patternUnits='userSpaceOnUse' patternTransform='scale(0.5) rotate(0)'%3E%3Crect width='100%25' height='100%25' fill='none'/%3E%3Cpath d='M50 0L93.3 25v50L50 100L6.7 75V25z' stroke='rgba(14, 165, 233, 0.05)' stroke-width='1' fill='none'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23hexagons)'/%3E%3C/svg%3E");
+  pointer-events: none;
+  opacity: 0.4;
+  z-index: 0;
+  transform: translateZ(-50px) scale(1.05);
+}
+
+.dark body {
+  background: 
+    /* Deep layer - base gradient */
+    linear-gradient(135deg, #0f172a 0%, #1e293b 25%, #334155 50%, #1e293b 75%, #0f172a 100%),
+    /* Mid layer - radial gradients for depth */
+    radial-gradient(ellipse at 20% 30%, rgba(14, 165, 233, 0.2) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 70%, rgba(139, 92, 246, 0.2) 0%, transparent 60%),
+    radial-gradient(ellipse at 50% 50%, rgba(236, 72, 153, 0.15) 0%, transparent 70%),
+    /* Top layer - subtle texture */
+    linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
+  background-attachment: fixed;
+  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+}
+
+.dark body::before {
+  background-image: 
+    /* Primary grid */
+    linear-gradient(rgba(14, 165, 233, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(14, 165, 233, 0.1) 1px, transparent 1px),
+    /* Secondary grid for depth */
+    linear-gradient(rgba(139, 92, 246, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139, 92, 246, 0.06) 1px, transparent 1px);
+  opacity: 0.5;
+}
+
+.dark body::after {
+  background-image: 
+    url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='hexagons' width='100' height='100' patternUnits='userSpaceOnUse' patternTransform='scale(0.5) rotate(0)'%3E%3Crect width='100%25' height='100%25' fill='none'/%3E%3Cpath d='M50 0L93.3 25v50L50 100L6.7 75V25z' stroke='rgba(14, 165, 233, 0.08)' stroke-width='1' fill='none'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23hexagons)'/%3E%3C/svg%3E");
+  opacity: 0.3;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(241, 245, 249, 0.5);
+  border-radius: 10px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #0ea5e9 0%, #8b5cf6 100%);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #0284c7 0%, #7c3aed 100%);
+  background-clip: padding-box;
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.dark .glass {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Glow effect */
+.glow {
+  box-shadow: 0 0 20px rgba(14, 165, 233, 0.3), 0 0 40px rgba(139, 92, 246, 0.2);
+}
+
+.dark .glow {
+  box-shadow: 0 0 20px rgba(14, 165, 233, 0.5), 0 0 40px rgba(139, 92, 246, 0.3);
+}
+
+/* Animated gradient background */
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.gradient-animated {
+  background-size: 200% 200%;
+  animation: gradient-shift 8s ease infinite;
+}
+
+/* 3D Depth layers */
+.depth-layer-1 {
+  transform: translateZ(-200px) scale(1.2);
+  opacity: 0.3;
+}
+
+.depth-layer-2 {
+  transform: translateZ(-100px) scale(1.1);
+  opacity: 0.5;
+}
+
+.depth-layer-3 {
+  transform: translateZ(-50px) scale(1.05);
+  opacity: 0.7;
+}
+
+/* Parallax effect for depth */
+@keyframes parallax {
+  0%, 100% {
+    transform: translateY(0) translateZ(-100px) scale(1.1);
+  }
+  50% {
+    transform: translateY(-20px) translateZ(-100px) scale(1.1);
+  }
+}
+
+.parallax-bg {
+  animation: parallax 20s ease-in-out infinite;
+}
+
+/* Mesh gradient for depth */
+.mesh-gradient {
+  background: 
+    radial-gradient(at 0% 0%, rgba(14, 165, 233, 0.2) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.2) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.2) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(59, 130, 246, 0.2) 0px, transparent 50%);
+  background-size: 200% 200%;
+  animation: gradient-shift 15s ease infinite;
+}
+
+/* 3D Transform utilities */
+.hover\:rotate-x-2:hover {
+  transform: perspective(1000px) rotateX(2deg) translateY(-8px);
+}
+
+/* Depth shadow for 3D effect */
+.depth-shadow {
+  box-shadow: 
+    0 10px 30px rgba(0, 0, 0, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset,
+    0 -10px 20px rgba(0, 0, 0, 0.1);
+}
+
+.dark .depth-shadow {
+  box-shadow: 
+    0 10px 30px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+    0 -10px 20px rgba(0, 0, 0, 0.3);
+}
+
