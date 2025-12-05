@@ -4,9 +4,13 @@ const binanceService = require('../services/binanceService');
 const coingeckoService = require('../services/coingeckoService');
 const databaseService = require('../services/databaseService');
 const schedulerService = require('../services/schedulerService');
+const MetadataService = require('../services/metadataService');
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
 const { DEFAULT_API_PROVIDER } = require('../config/constants');
+
+// Initialize Metadata Service
+const metadataService = new MetadataService();
 
 /**
  * Tüm kripto paraların son fiyatlarını getirir
@@ -791,6 +795,200 @@ exports.deleteCoin = asyncHandler(async (req, res) => {
   } catch (error) {
     logger.error(`Error deleting coin ${symbol}:`, error);
     throw new AppError(`Coin silinirken hata oluştu: ${error.message}`, 500);
+  }
+});
+
+/**
+ * Get WebSocket/Price Service status
+ */
+exports.getPriceServiceStatus = asyncHandler(async (req, res) => {
+  try {
+    const priceService = global.priceService;
+    
+    if (!priceService) {
+      return res.status(200).json({
+        status: 'success',
+        data: {
+          initialized: false,
+          message: 'Price Service not yet initialized'
+        }
+      });
+    }
+
+    const status = priceService.getStatus();
+    
+    res.status(200).json({
+      status: 'success',
+      data: status
+    });
+  } catch (error) {
+    logger.error('Error getting price service status:', error);
+    throw new AppError('Price service durumu alınamadı', 500);
+  }
+});
+
+/**
+ * Add symbol to WebSocket tracking
+ */
+exports.addSymbolToTracking = asyncHandler(async (req, res) => {
+  try {
+    const { symbol } = req.body;
+    
+    if (!symbol) {
+      throw new AppError('Symbol parametresi gerekli', 400);
+    }
+
+    const priceService = global.priceService;
+    
+    if (!priceService) {
+      throw new AppError('Price Service henüz başlatılmadı', 503);
+    }
+
+    priceService.addSymbol(symbol);
+    
+    res.status(200).json({
+      status: 'success',
+      message: `${symbol} WebSocket tracking'e eklendi`,
+      data: priceService.getStatus()
+    });
+  } catch (error) {
+    logger.error('Error adding symbol to tracking:', error);
+    throw new AppError(`Symbol eklenirken hata oluştu: ${error.message}`, 500);
+  }
+});
+
+/**
+ * Remove symbol from WebSocket tracking
+ */
+exports.removeSymbolFromTracking = asyncHandler(async (req, res) => {
+  try {
+    const { symbol } = req.body;
+    
+    if (!symbol) {
+      throw new AppError('Symbol parametresi gerekli', 400);
+    }
+
+    const priceService = global.priceService;
+    
+    if (!priceService) {
+      throw new AppError('Price Service henüz başlatılmadı', 503);
+    }
+
+    priceService.removeSymbol(symbol);
+    
+    res.status(200).json({
+      status: 'success',
+      message: `${symbol} WebSocket tracking'den kaldırıldı`,
+      data: priceService.getStatus()
+    });
+  } catch (error) {
+    logger.error('Error removing symbol from tracking:', error);
+    throw new AppError(`Symbol kaldırılırken hata oluştu: ${error.message}`, 500);
+  }
+});
+
+/**
+ * Get coin metadata (with caching)
+ */
+exports.getCoinMetadata = asyncHandler(async (req, res) => {
+  try {
+    const { symbol } = req.params;
+    const { coinId } = req.query;
+    
+    if (!symbol) {
+      throw new AppError('Symbol parametresi gerekli', 400);
+    }
+
+    const metadata = await metadataService.getMetadata(symbol, coinId);
+    
+    res.status(200).json({
+      status: 'success',
+      data: metadata
+    });
+  } catch (error) {
+    logger.error(`Error getting metadata for ${symbol}:`, error);
+    throw new AppError(`Metadata alınamadı: ${error.message}`, 500);
+  }
+});
+
+/**
+ * Update coin metadata (user can add/edit metadata for custom coins)
+ */
+exports.updateCoinMetadata = asyncHandler(async (req, res) => {
+  try {
+    const { symbol } = req.params;
+    const {
+      name,
+      description,
+      logoUrl,
+      homepage,
+      whitepaper,
+      categories
+    } = req.body;
+    
+    if (!symbol) {
+      throw new AppError('Symbol parametresi gerekli', 400);
+    }
+
+    // Normalize symbol
+    const normalizedSymbol = symbol.toUpperCase().replace('USDT', '').replace('USD', '');
+    
+    // Get existing metadata or create new
+    let existingMetadata = await databaseService.getMetadata(normalizedSymbol);
+    
+    // Prepare metadata object
+    const metadataToSave = {
+      symbol: normalizedSymbol,
+      coinId: existingMetadata?.coin_id || null,
+      name: name || existingMetadata?.name || normalizedSymbol,
+      logoUrl: logoUrl || existingMetadata?.logo_url || '',
+      description: description || existingMetadata?.description || '',
+      marketCap: existingMetadata?.market_cap || 0,
+      marketCapRank: existingMetadata?.market_cap_rank || null,
+      homepage: homepage || existingMetadata?.homepage || '',
+      whitepaper: whitepaper || existingMetadata?.whitepaper || '',
+      categories: categories || existingMetadata?.categories || [],
+      currentPrice: existingMetadata?.current_price || 0,
+      priceChange24h: existingMetadata?.price_change_24h || 0,
+      circulatingSupply: existingMetadata?.circulating_supply || 0,
+      totalSupply: existingMetadata?.total_supply || 0,
+      maxSupply: existingMetadata?.max_supply || null,
+    };
+
+    // Save to database
+    const savedMetadata = await databaseService.saveMetadata(normalizedSymbol, metadataToSave);
+    
+    res.status(200).json({
+      status: 'success',
+      message: `${normalizedSymbol} için metadata güncellendi`,
+      data: savedMetadata
+    });
+  } catch (error) {
+    logger.error(`Error updating metadata for ${symbol}:`, error);
+    throw new AppError(`Metadata güncellenirken hata oluştu: ${error.message}`, 500);
+  }
+});
+
+/**
+ * Invalidate metadata cache for a coin
+ */
+exports.invalidateMetadataCache = asyncHandler(async (req, res) => {
+  try {
+    const { symbol } = req.body;
+    
+    if (!symbol) {
+      throw new AppError('Symbol parametresi gerekli', 400);
+    }
+
+    await metadataService.invalidateCache(symbol);
+    
+    res.status(200).json({
+      status: 'success',
+      message: `${symbol} için metadata cache temizlendi`
+    });
+  } catch (error) {
+    logger.error(`Error invalidating cache for ${symbol}:`, error);
+    throw new AppError(`Cache temizlenirken hata oluştu: ${error.message}`, 500);
   }
 });
 

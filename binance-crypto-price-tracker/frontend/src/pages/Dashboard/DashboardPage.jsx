@@ -1282,16 +1282,32 @@ const DashboardPage = () => {
         }
         
         toast.success(
-          `${symbol} başarıyla eklendi ve fiyatı güncellendi! Fiyat: $${formatPrice(validation.data.data.price)}`, 
-          { id: 'add-coin', duration: 3000 }
+          `${symbol} başarıyla eklendi! Coin detay sayfasında "Bilgileri Düzenle" butonuna tıklayarak açıklama, logo ve diğer bilgileri ekleyebilirsiniz.`, 
+          { 
+            id: 'add-coin', 
+            duration: 6000
+          }
         )
+        
+        // Kullanıcıyı coin detay sayfasına yönlendir (metadata ekleyebilir)
+        setTimeout(() => {
+          navigate(`/crypto/${symbol}`)
+        }, 1500) // 1.5 saniye sonra yönlendir
       } catch (fetchError) {
         // Fiyat çekme hatası olsa bile coin eklendi, sadece uyarı ver
         console.error('Price fetch error:', fetchError)
         toast.success(
-          `${symbol} eklendi! Fiyat: $${formatPrice(validation.data.data.price)}`, 
-          { id: 'add-coin', duration: 3000 }
+          `${symbol} eklendi! Coin detay sayfasında "Bilgileri Düzenle" butonuna tıklayarak açıklama, logo ve diğer bilgileri ekleyebilirsiniz.`, 
+          { 
+            id: 'add-coin', 
+            duration: 6000
+          }
         )
+        
+        // Kullanıcıyı coin detay sayfasına yönlendir (metadata ekleyebilir)
+        setTimeout(() => {
+          navigate(`/crypto/${symbol}`)
+        }, 1500) // 1.5 saniye sonra yönlendir
         // Veritabanından mevcut verileri çek
         await refetch()
       }

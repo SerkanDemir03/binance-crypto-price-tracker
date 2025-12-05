@@ -144,6 +144,16 @@ export const cryptoAPI = {
   
   // Coin detaylı bilgileri
   getCoinInfo: (symbol) => api.get(`/crypto/coins/${symbol}/info`),
+  
+  // Metadata operations
+  getCoinMetadata: (symbol, coinId = null) => {
+    const params = coinId ? { coinId } : {}
+    return api.get(`/crypto/metadata/${symbol}`, { params })
+  },
+  
+  updateCoinMetadata: (symbol, metadata) => api.put(`/crypto/metadata/${symbol}`, metadata),
+  
+  invalidateMetadataCache: (symbol) => api.post('/crypto/metadata/invalidate', { symbol }),
 }
 
 export default api

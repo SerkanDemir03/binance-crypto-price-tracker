@@ -123,4 +123,14 @@ router.post('/coins/price-by-id', cryptoController.getPriceByCoinId);
 router.post('/coins/prices', cryptoController.getPricesByCustomSymbols);
 router.get('/coins/:symbol/info', cryptoController.getCoinInfo);
 
+// WebSocket/Price Service routes
+router.get('/websocket/status', cryptoController.getPriceServiceStatus);
+router.post('/websocket/symbols/add', cryptoController.addSymbolToTracking);
+router.post('/websocket/symbols/remove', cryptoController.removeSymbolFromTracking);
+
+// Metadata routes (with 24-hour caching)
+router.get('/metadata/:symbol', cryptoController.getCoinMetadata);
+router.put('/metadata/:symbol', cryptoController.updateCoinMetadata);
+router.post('/metadata/invalidate', cryptoController.invalidateMetadataCache);
+
 module.exports = router;

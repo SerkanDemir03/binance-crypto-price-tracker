@@ -34,10 +34,64 @@ class DatabaseService {
       }
       
       logger.info(`✅ Table ${TABLE_NAME} created or already exists`);
+      
+      // Also create metadata table
+      await this.createMetadataTable();
+      
       return true;
     } catch (error) {
       logger.error('Error creating table:', error);
       throw new AppError('Tablo oluşturulurken hata oluştu', 500);
+    }
+  }
+
+  /**
+   * Metadata tablosunu oluşturur (yoksa)
+   * Stores coin metadata (name, logo, description, market cap) with 24-hour caching
+   */
+  async createMetadataTable() {
+    try {
+      logger.info('Creating metadata table: coin_metadata');
+      
+      const createQuery = `
+        CREATE TABLE IF NOT EXISTS coin_metadata (
+          id SERIAL PRIMARY KEY,
+          symbol VARCHAR(20) UNIQUE NOT NULL,
+          coin_id VARCHAR(100),
+          name VARCHAR(200),
+          logo_url TEXT,
+          description TEXT,
+          market_cap NUMERIC,
+          market_cap_rank INTEGER,
+          homepage TEXT,
+          whitepaper TEXT,
+          categories JSONB,
+          current_price NUMERIC,
+          price_change_24h NUMERIC,
+          circulating_supply NUMERIC,
+          total_supply NUMERIC,
+          max_supply NUMERIC,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `;
+
+      await pool.query(createQuery);
+      
+      // Create indexes for faster queries
+      try {
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_metadata_symbol ON coin_metadata(symbol);`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_metadata_updated_at ON coin_metadata(updated_at DESC);`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_metadata_coin_id ON coin_metadata(coin_id);`);
+      } catch (indexError) {
+        logger.warn(`Metadata index oluşturulurken hata (devam ediliyor):`, indexError.message);
+      }
+      
+      logger.info('✅ Metadata table created or already exists');
+      return true;
+    } catch (error) {
+      logger.error('Error creating metadata table:', error);
+      throw new AppError('Metadata tablosu oluşturulurken hata oluştu', 500);
     }
   }
 
@@ -333,13 +387,41 @@ class DatabaseService {
       const params = [cleanSymbol];
       
       if (startDate) {
-        query += ` AND binancetime >= $${params.length + 1}`;
-        params.push(startDate);
+        // Tarih formatını PostgreSQL'e uygun hale getir
+        // ISO 8601 formatını PostgreSQL TIMESTAMP'e çevir
+        let startDateFormatted = startDate;
+        try {
+          // Eğer string ise Date objesine çevir ve ISO formatına getir
+          if (typeof startDate === 'string') {
+            const dateObj = new Date(startDate);
+            if (!isNaN(dateObj.getTime())) {
+              startDateFormatted = dateObj.toISOString();
+            }
+          }
+        } catch (dateError) {
+          logger.warn('Start date format error:', dateError);
+          // Hata durumunda orijinal değeri kullan
+        }
+        query += ` AND binancetime >= $${params.length + 1}::timestamp`;
+        params.push(startDateFormatted);
       }
       
       if (endDate) {
-        query += ` AND binancetime <= $${params.length + 1}`;
-        params.push(endDate);
+        // Tarih formatını PostgreSQL'e uygun hale getir
+        let endDateFormatted = endDate;
+        try {
+          if (typeof endDate === 'string') {
+            const dateObj = new Date(endDate);
+            if (!isNaN(dateObj.getTime())) {
+              endDateFormatted = dateObj.toISOString();
+            }
+          }
+        } catch (dateError) {
+          logger.warn('End date format error:', dateError);
+          // Hata durumunda orijinal değeri kullan
+        }
+        query += ` AND binancetime <= $${params.length + 1}::timestamp`;
+        params.push(endDateFormatted);
       }
       
       query += ` ORDER BY binancetime DESC LIMIT $${params.length + 1}`;
@@ -557,6 +639,132 @@ class DatabaseService {
     } catch (error) {
       logger.error('Error getting statistics:', error);
       throw new AppError('İstatistikler getirilirken hata oluştu', 500);
+    }
+  }
+
+  /**
+   * Get metadata for a coin symbol
+   * @param {string} symbol - Coin symbol (e.g., 'BTC')
+   * @returns {Promise<Object|null>} Metadata object or null
+   */
+  async getMetadata(symbol) {
+    try {
+      const query = `
+        SELECT * FROM coin_metadata
+        WHERE symbol = $1
+        LIMIT 1;
+      `;
+      
+      const result = await pool.query(query, [symbol.toUpperCase()]);
+      return result.rows[0] || null;
+    } catch (error) {
+      logger.error(`Error getting metadata for ${symbol}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Save or update metadata for a coin
+   * @param {string} symbol - Coin symbol (e.g., 'BTC')
+   * @param {Object} metadata - Metadata object
+   * @returns {Promise<Object>} Saved metadata record
+   */
+  async saveMetadata(symbol, metadata) {
+    try {
+      // Ensure metadata table exists
+      await this.createMetadataTable();
+
+      const query = `
+        INSERT INTO coin_metadata (
+          symbol, coin_id, name, logo_url, description, market_cap,
+          market_cap_rank, homepage, whitepaper, categories,
+          current_price, price_change_24h, circulating_supply,
+          total_supply, max_supply, updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        ON CONFLICT (symbol)
+        DO UPDATE SET
+          coin_id = EXCLUDED.coin_id,
+          name = EXCLUDED.name,
+          logo_url = EXCLUDED.logo_url,
+          description = EXCLUDED.description,
+          market_cap = EXCLUDED.market_cap,
+          market_cap_rank = EXCLUDED.market_cap_rank,
+          homepage = EXCLUDED.homepage,
+          whitepaper = EXCLUDED.whitepaper,
+          categories = EXCLUDED.categories,
+          current_price = EXCLUDED.current_price,
+          price_change_24h = EXCLUDED.price_change_24h,
+          circulating_supply = EXCLUDED.circulating_supply,
+          total_supply = EXCLUDED.total_supply,
+          max_supply = EXCLUDED.max_supply,
+          updated_at = EXCLUDED.updated_at
+        RETURNING *;
+      `;
+
+      const values = [
+        symbol.toUpperCase(),
+        metadata.coinId || null,
+        metadata.name || symbol,
+        metadata.logoUrl || '',
+        metadata.description || '',
+        metadata.marketCap || 0,
+        metadata.marketCapRank || null,
+        metadata.homepage || '',
+        metadata.whitepaper || '',
+        JSON.stringify(metadata.categories || []),
+        metadata.currentPrice || 0,
+        metadata.priceChange24h || 0,
+        metadata.circulatingSupply || 0,
+        metadata.totalSupply || 0,
+        metadata.maxSupply || null,
+        new Date()
+      ];
+
+      const result = await pool.query(query, values);
+      return result.rows[0];
+    } catch (error) {
+      logger.error(`Error saving metadata for ${symbol}:`, error);
+      throw new AppError(`Metadata kaydedilirken hata oluştu: ${error.message}`, 500);
+    }
+  }
+
+  /**
+   * Delete metadata for a coin
+   * @param {string} symbol - Coin symbol
+   * @returns {Promise<boolean>} True if deleted
+   */
+  async deleteMetadata(symbol) {
+    try {
+      const query = `
+        DELETE FROM coin_metadata
+        WHERE symbol = $1;
+      `;
+      
+      const result = await pool.query(query, [symbol.toUpperCase()]);
+      return result.rowCount > 0;
+    } catch (error) {
+      logger.error(`Error deleting metadata for ${symbol}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Get all metadata records
+   * @returns {Promise<Array>} Array of metadata records
+   */
+  async getAllMetadata() {
+    try {
+      const query = `
+        SELECT * FROM coin_metadata
+        ORDER BY symbol;
+      `;
+      
+      const result = await pool.query(query);
+      return result.rows;
+    } catch (error) {
+      logger.error('Error getting all metadata:', error);
+      return [];
     }
   }
 }

@@ -4,6 +4,8 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
 
 // Middleware imports
 const errorHandler = require('./middleware/errorHandler');
@@ -13,6 +15,22 @@ const notFound = require('./middleware/notFound');
 const apiRoutes = require('./routes');
 
 const app = express();
+
+// Create HTTP server for Socket.io
+const httpServer = createServer(app);
+
+// Initialize Socket.io
+const io = new Server(httpServer, {
+  cors: {
+    origin: process.env.CORS_ORIGIN || ['http://localhost:3000', 'http://localhost:3001'],
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
+  transports: ['websocket', 'polling']
+});
+
+// Make io available globally
+app.set('io', io);
 
 // Security Middleware
 app.use(helmet());
@@ -59,5 +77,27 @@ app.use('/api', apiRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
-module.exports = app;
+// Socket.io connection handling
+io.on('connection', (socket) => {
+  console.log(`✅ Client connected: ${socket.id}`);
+
+  // Send current status on connection
+  socket.emit('connected', {
+    message: 'Connected to real-time price stream',
+    timestamp: new Date().toISOString()
+  });
+
+  // Handle client disconnection
+  socket.on('disconnect', () => {
+    console.log(`❌ Client disconnected: ${socket.id}`);
+  });
+
+  // Handle subscription requests
+  socket.on('subscribe-symbols', (symbols) => {
+    console.log(`📊 Client ${socket.id} subscribed to symbols:`, symbols);
+    socket.emit('subscription-confirmed', { symbols });
+  });
+});
+
+module.exports = { app, httpServer, io };
 
