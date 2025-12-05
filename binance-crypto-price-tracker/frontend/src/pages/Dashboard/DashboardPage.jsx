@@ -1739,6 +1739,20 @@ const DashboardPage = () => {
               : 0
             const isPositive = priceChange >= 0
             
+            // Calculate Y-axis domain to emphasize trend direction
+            const yAxisDomain = history.length >= 2
+              ? (() => {
+                  const prices = history.map(h => h.price).filter(p => p != null && p > 0)
+                  if (prices.length === 0) return [0, 100]
+                  const minPrice = Math.min(...prices)
+                  const maxPrice = Math.max(...prices)
+                  const priceRange = maxPrice - minPrice
+                  // Add padding to make trend more visible (10% of range on each side)
+                  const padding = priceRange * 0.1 || (maxPrice * 0.01)
+                  return [minPrice - padding, maxPrice + padding]
+                })()
+              : [0, 100]
+            
             // Veri durumu kontrolü
             const hasPrice = crypto.price && crypto.price > 0
             const hasHistory = history.length > 0
@@ -1888,13 +1902,15 @@ const DashboardPage = () => {
                     {hasEnoughHistory ? (
                       <div className="mb-6 h-32 bg-gradient-to-br from-gray-50/80 to-gray-100/80 dark:from-gray-700/80 dark:to-gray-800/80 rounded-xl p-3 border border-gray-200/50 dark:border-gray-600/50 shadow-inner backdrop-blur-sm">
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={history}>
+                          <LineChart data={history} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
                             <defs>
                               <linearGradient id={`gradient-${crypto.name}`} x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor={isPositive ? '#10b981' : '#ef4444'} stopOpacity={0.4}/>
                                 <stop offset="95%" stopColor={isPositive ? '#10b981' : '#ef4444'} stopOpacity={0}/>
                               </linearGradient>
                             </defs>
+                            <YAxis hide domain={yAxisDomain} />
+                            <XAxis hide />
                             <Area
                               type="monotone"
                               dataKey="price"
