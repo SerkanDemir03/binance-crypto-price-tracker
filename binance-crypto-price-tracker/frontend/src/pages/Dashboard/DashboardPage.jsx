@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery } from 'react-query'
 import { useNavigate } from 'react-router-dom'
 import { cryptoAPI } from '../../services/api'
@@ -723,7 +723,10 @@ const DashboardPage = () => {
   const [isLoadingCoinInfo, setIsLoadingCoinInfo] = useState(false)
 
   // Tüm gösterilecek coinler: varsayılan Binance coinleri + custom coinler
-  const allDisplayCoins = [...new Set([...DEFAULT_BINANCE_COINS, ...customCoins])]
+  // useMemo ile memoize et - customCoins değişmediğinde yeniden hesaplama
+  const allDisplayCoins = useMemo(() => {
+    return [...new Set([...DEFAULT_BINANCE_COINS, ...customCoins])]
+  }, [customCoins])
   
   // Fetch latest prices from database (varsayılan coinler + custom coinler)
   const { data: pricesData, isLoading, isError, error, refetch, dataUpdatedAt } = useQuery(
@@ -800,33 +803,38 @@ const DashboardPage = () => {
 
   // Her kripto para için fiyat geçmişini çek
   // Varsayılan Binance coinleri + custom coinler göster
-  const allPrices = pricesData?.data?.data || []
-  
-  // Varsayılan coinler + custom coinler için filtrele
-  let prices = allPrices.filter(p => {
-    const coinName = p.name.replace('USDT', '')
-    return allDisplayCoins.includes(coinName)
-  })
-  
-  // Veritabanında olmayan custom coin'ler için placeholder ekle (sadece custom coinler için)
-  // Varsayılan coinler için placeholder ekleme - onlar zaten veritabanında olmalı
-  const existingCoinNames = allPrices.map(p => p.name.replace('USDT', ''))
-  const missingCustomCoins = customCoins.filter(c => !existingCoinNames.includes(c))
-  
-  // Sadece custom coinler için loading placeholder ekle (ve sadece loading tamamlandıysa)
-  // İlk yüklemede loading placeholder gösterme - cache'deki verileri göster
-  // Eğer veri varsa (cache'den veya yeni fetch'ten), eksik coin'ler için placeholder ekle
-  if (missingCustomCoins.length > 0 && pricesData && !isLoading) {
-    // Eksik custom coin'ler için placeholder ekle (veritabanına henüz kaydedilmemiş)
-    missingCustomCoins.forEach(coin => {
-      prices.push({
-        name: coin + 'USDT',
-        price: null, // Henüz fiyat yok
-        binancetime: new Date(),
-        _isLoading: true // Yükleniyor işareti
-      })
+  // useMemo ile prices hesaplamasını optimize et - gereksiz re-render'ları önle
+  const prices = useMemo(() => {
+    const allPrices = pricesData?.data?.data || []
+    
+    // Varsayılan coinler + custom coinler için filtrele
+    const filteredPrices = allPrices.filter(p => {
+      const coinName = p.name.replace('USDT', '')
+      return allDisplayCoins.includes(coinName)
     })
-  }
+    
+    // Veritabanında olmayan custom coin'ler için placeholder ekle (sadece custom coinler için)
+    // Varsayılan coinler için placeholder ekleme - onlar zaten veritabanında olmalı
+    const existingCoinNames = allPrices.map(p => p.name.replace('USDT', ''))
+    const missingCustomCoins = customCoins.filter(c => !existingCoinNames.includes(c))
+    
+    // Sadece custom coinler için loading placeholder ekle (ve sadece loading tamamlandıysa)
+    // İlk yüklemede loading placeholder gösterme - cache'deki verileri göster
+    // Eğer veri varsa (cache'den veya yeni fetch'ten), eksik coin'ler için placeholder ekle
+    if (missingCustomCoins.length > 0 && pricesData && !isLoading) {
+      // Eksik custom coin'ler için placeholder ekle (veritabanına henüz kaydedilmemiş)
+      missingCustomCoins.forEach(coin => {
+        filteredPrices.push({
+          name: coin + 'USDT',
+          price: null, // Henüz fiyat yok
+          binancetime: new Date(),
+          _isLoading: true // Yükleniyor işareti
+        })
+      })
+    }
+    
+    return filteredPrices
+  }, [pricesData, allDisplayCoins, customCoins, isLoading])
 
   useEffect(() => {
     if (prices.length > 0 && !isFetching) {
@@ -856,7 +864,7 @@ const DashboardPage = () => {
           })
           
           setPriceHistoryMap(formattedHistories)
-          } catch (error) {
+        } catch (error) {
           console.error('Error fetching histories:', error)
           // Hata durumunda mevcut history'leri koru (boş map set etme)
         }
@@ -871,7 +879,7 @@ const DashboardPage = () => {
       // Fiyat yoksa history map'i temizle
       setPriceHistoryMap({})
     }
-  }, [prices, allDisplayCoins, isFetching])
+  }, [prices.length, allDisplayCoins, isFetching]) // prices.length kullan - sadece uzunluk değiştiğinde tetikle
 
   // Custom coin'leri localStorage'a kaydet
   useEffect(() => {
@@ -1181,9 +1189,18 @@ const DashboardPage = () => {
       
       // Eğer coin objesi ise (arama sonuçlarından), ID'yi kullan
       if (typeof coinSymbolOrObject === 'object' && coinSymbolOrObject.id) {
+        // ÖNEMLİ: Arama sonuçlarından gelen coin objesinin symbol'ünü kullan (en güvenilir)
         symbol = coinSymbolOrObject.symbol.toUpperCase()
         coinId = coinSymbolOrObject.id
         coinName = coinSymbolOrObject.name
+        
+        // Debug: Coin objesi bilgilerini logla
+        console.log('🔍 Coin objesi bilgileri:', {
+          id: coinId,
+          symbol: symbol,
+          name: coinName,
+          fullObject: coinSymbolOrObject
+        })
       } else {
         // String ise (manuel giriş), sadece symbol
         symbol = coinSymbolOrObject.toUpperCase()
@@ -1201,7 +1218,8 @@ const DashboardPage = () => {
       try {
         // Coin ID varsa direkt fiyat çek, yoksa validate et
         if (coinId) {
-          // Coin ID ile direkt fiyat çek ve veritabanına kaydet (saveToDb = true)
+          // ÖNEMLİ: Backend'e gönderirken de arama sonuçlarından gelen coin objesinin symbol'ünü kullan
+          // Backend bu symbol'ü veritabanına kaydedecek, bu yüzden doğru olmalı
           const priceResponse = await cryptoAPI.getPriceByCoinId(coinId, symbol, true)
           validation = { data: { data: priceResponse.data.data } }
           
@@ -1220,10 +1238,17 @@ const DashboardPage = () => {
         }
       } catch (error) {
         // Hata durumunda tekrar symbol ile dene
-        validation = await cryptoAPI.validateCoin(symbol, true)
-        
-        if (validation.data.data.savedToDb) {
-          toast.success(`${symbol} veritabanına kaydedildi!`, { id: 'add-coin-db', duration: 2000 })
+        try {
+          validation = await cryptoAPI.validateCoin(symbol, true)
+          
+          if (validation.data.data.savedToDb) {
+            toast.success(`${symbol} veritabanına kaydedildi!`, { id: 'add-coin-db', duration: 2000 })
+          }
+        } catch (retryError) {
+          // İkinci deneme de başarısız oldu
+          console.error('Coin validation retry failed:', retryError)
+          toast.error(`${symbol} için coin doğrulanamadı: ${retryError.response?.data?.message || retryError.message}`, { id: 'add-coin' })
+          return
         }
       }
       
@@ -1232,15 +1257,53 @@ const DashboardPage = () => {
         return
       }
       
+      // ÖNEMLİ: Backend artık CoinGecko'dan doğru symbol'ü alıyor, bu yüzden backend'den dönen symbol'ü kullan
+      // Backend'den dönen symbol CoinGecko'dan geldiği için en güvenilir kaynak
+      let finalSymbol
+      if (validation.data.data.symbol) {
+        // Backend'den dönen symbol'ü kullan (CoinGecko'dan alınan, en güvenilir)
+        finalSymbol = validation.data.data.symbol.toUpperCase()
+        console.log('✅ Backend\'den dönen symbol kullanılıyor (CoinGecko\'dan):', finalSymbol)
+      } else if (coinId && coinSymbolOrObject && typeof coinSymbolOrObject === 'object') {
+        // Fallback: Arama sonuçlarından gelen coin objesinin symbol'ünü kullan
+        finalSymbol = coinSymbolOrObject.symbol.toUpperCase()
+        console.log('⚠️ Backend symbol yok, arama sonuçlarından gelen symbol kullanılıyor:', finalSymbol)
+      } else {
+        // Son fallback: Manuel giriş veya orijinal symbol
+        finalSymbol = symbol
+        console.log('⚠️ Fallback: Orijinal symbol kullanılıyor:', finalSymbol)
+      }
+      
+      // Debug: Backend response'unu logla
+      console.log('📥 Backend response ve final symbol:', {
+        validationData: validation.data.data,
+        backendSymbol: validation.data.data.symbol,
+        originalSymbol: symbol,
+        finalSymbol: finalSymbol,
+        coinId: coinId,
+        coinName: coinName,
+        coinObject: coinSymbolOrObject
+      })
+      
+      // Veritabanı formatına çevir (USDT ekle) - CryptoDetailPage bunu bekliyor
+      const dbSymbol = finalSymbol.toUpperCase().endsWith('USDT') 
+        ? finalSymbol.toUpperCase() 
+        : finalSymbol.toUpperCase() + 'USDT'
+      
       // Coin başarıyla veritabanına kaydedildi
-      console.log(`✅ ${symbol} coin'i veritabanına kaydedildi:`, {
-        symbol: validation.data.data.symbol,
+      console.log(`✅ ${dbSymbol} coin'i veritabanına kaydedildi:`, {
+        finalSymbol: finalSymbol,
+        dbSymbol: dbSymbol,
+        originalSymbol: symbol,
+        coinId: coinId,
+        coinName: coinName,
         price: validation.data.data.price,
         savedToDb: validation.data.data.savedToDb
       })
 
-      // Coin'i custom listesine ekle
-      const updatedCustomCoins = [...customCoins, symbol]
+      // Coin'i custom listesine ekle - USDT olmadan ekle (çünkü customCoins'de USDT olmadan tutuluyor)
+      const symbolWithoutUSDT = finalSymbol.toUpperCase()
+      const updatedCustomCoins = [...customCoins, symbolWithoutUSDT]
       setCustomCoins(updatedCustomCoins)
       
       // Modal'ı kapat
@@ -1249,9 +1312,31 @@ const DashboardPage = () => {
       setCoinSearchResults([])
       
       // Coin veritabanına kaydedildi, şimdi fiyatları çek ve güncelle
-      toast.loading(`${symbol} için fiyatlar güncelleniyor...`, { id: 'add-coin' })
+      toast.loading(`${symbolWithoutUSDT} için fiyatlar güncelleniyor...`, { id: 'add-coin' })
       
       try {
+        // ÖNEMLİ: Backend'den dönen symbol'ü kullan (CoinGecko'dan alınan, en güvenilir)
+        // Backend artık CoinGecko'dan doğru symbol'ü alıyor ve veritabanına kaydediyor
+        const savedSymbol = validation.data.data.symbol || finalSymbol
+        const savedDbSymbol = savedSymbol.toUpperCase().endsWith('USDT') 
+          ? savedSymbol.toUpperCase() 
+          : savedSymbol.toUpperCase() + 'USDT'
+        
+        // Yönlendirme için backend'den dönen symbol'ü kullan (CoinGecko'dan alınan)
+        const navigationSymbol = dbSymbol // finalSymbol'den oluşturulan dbSymbol (backend'den gelen)
+        
+        console.log('🎯 Yönlendirme için symbol kontrolü (fetch öncesi):', {
+          coinObjectSymbol: coinSymbolOrObject?.symbol,
+          finalSymbol: finalSymbol,
+          dbSymbol: dbSymbol,
+          savedSymbol: savedSymbol,
+          savedDbSymbol: savedDbSymbol,
+          navigationSymbol: navigationSymbol,
+          backendResponse: validation.data.data,
+          coinId: coinId,
+          coinName: coinName
+        })
+        
         // Custom coin'ler için fiyatları çek ve veritabanına kaydet
         const fetchResponse = await cryptoAPI.fetchAndSavePrices(apiProvider, updatedCustomCoins)
         
@@ -1282,31 +1367,33 @@ const DashboardPage = () => {
         }
         
         toast.success(
-          `${symbol} başarıyla eklendi! Coin detay sayfasında "Bilgileri Düzenle" butonuna tıklayarak açıklama, logo ve diğer bilgileri ekleyebilirsiniz.`, 
+          `${symbolWithoutUSDT} başarıyla eklendi! Coin detay sayfasında "Bilgileri Düzenle" butonuna tıklayarak açıklama, logo ve diğer bilgileri ekleyebilirsiniz.`, 
           { 
             id: 'add-coin', 
             duration: 6000
           }
         )
         
-        // Kullanıcıyı coin detay sayfasına yönlendir (metadata ekleyebilir)
+        // Kullanıcıyı coin detay sayfasına yönlendir - arama sonuçlarından gelen coin objesinin symbol'ünü kullan
         setTimeout(() => {
-          navigate(`/crypto/${symbol}`)
+          console.log(`🚀 Yönlendirme yapılıyor: /crypto/${navigationSymbol} (coin: ${coinName}, coinId: ${coinId})`)
+          navigate(`/crypto/${navigationSymbol}`)
         }, 1500) // 1.5 saniye sonra yönlendir
       } catch (fetchError) {
         // Fiyat çekme hatası olsa bile coin eklendi, sadece uyarı ver
         console.error('Price fetch error:', fetchError)
         toast.success(
-          `${symbol} eklendi! Coin detay sayfasında "Bilgileri Düzenle" butonuna tıklayarak açıklama, logo ve diğer bilgileri ekleyebilirsiniz.`, 
+          `${symbolWithoutUSDT} eklendi! Coin detay sayfasında "Bilgileri Düzenle" butonuna tıklayarak açıklama, logo ve diğer bilgileri ekleyebilirsiniz.`, 
           { 
             id: 'add-coin', 
             duration: 6000
           }
         )
         
-        // Kullanıcıyı coin detay sayfasına yönlendir (metadata ekleyebilir)
+        // Kullanıcıyı coin detay sayfasına yönlendir - arama sonuçlarından gelen coin objesinin symbol'ünü kullan
         setTimeout(() => {
-          navigate(`/crypto/${symbol}`)
+          console.log(`🚀 Yönlendirme yapılıyor (hata durumunda): /crypto/${navigationSymbol} (coin: ${coinName}, coinId: ${coinId})`)
+          navigate(`/crypto/${navigationSymbol}`)
         }, 1500) // 1.5 saniye sonra yönlendir
         // Veritabanından mevcut verileri çek
         await refetch()
@@ -1401,12 +1488,12 @@ const DashboardPage = () => {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] animate-fade-in">
         <div className="relative">
-          <div className="absolute inset-0 bg-gradient-to-r from-primary-400/50 via-purple-400/50 to-pink-400/50 dark:from-primary-700/50 dark:via-purple-700/50 dark:to-pink-700/50 rounded-full blur-3xl opacity-60 animate-pulse-slow"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-primary-500/60 via-primary-400/55 to-primary-200/55 dark:from-primary-700/55 dark:via-primary-600/55 dark:to-primary-500/45 rounded-full blur-3xl opacity-60 animate-pulse-slow"></div>
           <div className="relative">
             <LoadingSpinner size="xl" />
           </div>
         </div>
-        <p className="mt-8 text-xl text-gray-700 dark:text-gray-200 font-bold animate-pulse bg-gradient-to-r from-primary-600 to-purple-600 bg-clip-text text-transparent">
+        <p className="mt-8 text-xl text-gray-700 dark:text-gray-200 font-bold animate-pulse bg-gradient-to-r from-primary-600 to-primary-400 bg-clip-text text-transparent">
           Veriler yükleniyor...
         </p>
       </div>
@@ -1464,13 +1551,13 @@ const DashboardPage = () => {
         <div className="absolute inset-0 mesh-gradient opacity-30 parallax-bg"></div>
         
         {/* Layer 2 - Mid depth */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary-400/20 rounded-full blur-3xl animate-float"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-400/20 rounded-full blur-3xl animate-float" style={{ animationDelay: '3s' }}></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-pink-400/15 rounded-full blur-3xl animate-float" style={{ animationDelay: '1.5s' }}></div>
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary-400/25 rounded-full blur-3xl animate-float"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-orange-300/25 rounded-full blur-3xl animate-float" style={{ animationDelay: '3s' }}></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-amber-200/25 rounded-full blur-3xl animate-float" style={{ animationDelay: '1.5s' }}></div>
         
         {/* Layer 3 - Surface depth */}
-        <div className="absolute top-0 right-0 w-72 h-72 bg-cyan-300/10 rounded-full blur-2xl animate-float" style={{ animationDelay: '4s' }}></div>
-        <div className="absolute bottom-0 left-0 w-72 h-72 bg-indigo-300/10 rounded-full blur-2xl animate-float" style={{ animationDelay: '5s' }}></div>
+        <div className="absolute top-0 right-0 w-72 h-72 bg-amber-300/12 rounded-full blur-2xl animate-float" style={{ animationDelay: '4s' }}></div>
+        <div className="absolute bottom-0 left-0 w-72 h-72 bg-orange-200/12 rounded-full blur-2xl animate-float" style={{ animationDelay: '5s' }}></div>
       </div>
       {/* 429 Rate Limit Uyarısı (cache'deki veriler gösteriliyorsa) */}
       {show429Warning && (
@@ -1499,8 +1586,8 @@ const DashboardPage = () => {
       
       {/* Header with enhanced gradient background and 3D depth */}
       <div className="relative overflow-hidden rounded-3xl shadow-2xl p-8 md:p-10 text-white mb-8" style={{ transform: 'translateZ(0)' }}>
-        {/* Deep layer - base gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary-600 via-purple-600 to-pink-600 gradient-animated"></div>
+  {/* Deep layer - base gradient; use navy-oriented palette in dark mode */}
+  <div className="absolute inset-0 bg-gradient-to-br from-primary-900 via-primary-700 to-primary-400 gradient-animated dark:from-[#071428] dark:via-[#07283b] dark:to-[#0b3650]"></div>
         
         {/* Mid layer - mesh gradient for depth */}
         <div className="absolute inset-0 mesh-gradient opacity-40"></div>
@@ -1512,12 +1599,12 @@ const DashboardPage = () => {
         <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cdefs%3E%3Cpattern id=\'hex\' width=\'60\' height=\'60\' patternUnits=\'userSpaceOnUse\'%3E%3Cpath d=\'M30 0l26 15v30l-26 15L4 45V15z\' stroke=\'rgba(255,255,255,0.1)\' stroke-width=\'1\' fill=\'none\'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width=\'100%25\' height=\'100%25\' fill=\'url(%23hex)\'/%3E%3C/svg%3E')] opacity-20"></div>
         
         {/* Floating orbs for depth - multiple layers */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-float" style={{ transform: 'translateZ(-50px)' }}></div>
-        <div className="absolute bottom-0 left-0 w-72 h-72 bg-purple-400/20 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s', transform: 'translateZ(-30px)' }}></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-pink-300/15 rounded-full blur-3xl animate-float" style={{ animationDelay: '4s', transform: 'translateZ(-20px)' }}></div>
+        <div className="absolute top-0 right-0 w-96 h-96 bg-white/12 rounded-full blur-3xl animate-float" style={{ transform: 'translateZ(-50px)' }}></div>
+        <div className="absolute bottom-0 left-0 w-72 h-72 bg-primary-300/18 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s', transform: 'translateZ(-30px)' }}></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-primary-200/16 rounded-full blur-3xl animate-float" style={{ animationDelay: '4s', transform: 'translateZ(-20px)' }}></div>
         
-        {/* Glassmorphism overlay - darker for better text readability */}
-        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" style={{ transform: 'translateZ(10px)' }}></div>
+  {/* Glassmorphism overlay - darker for better text readability (stronger in dark mode) */}
+  <div className="absolute inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-sm" style={{ transform: 'translateZ(10px)' }}></div>
         
         <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="animate-slide-up">
@@ -1655,13 +1742,13 @@ const DashboardPage = () => {
       {prices.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-32 glass rounded-3xl shadow-2xl border-2 border-white/30 animate-fade-in relative overflow-hidden">
           {/* Background effects */}
-          <div className="absolute inset-0 bg-gradient-to-br from-primary-100/50 via-purple-100/50 to-pink-100/50 dark:from-primary-900/20 dark:via-purple-900/20 dark:to-pink-900/20"></div>
-          <div className="absolute top-0 right-0 w-64 h-64 bg-primary-200/30 dark:bg-primary-800/30 rounded-full blur-3xl animate-float"></div>
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-200/30 dark:bg-purple-800/30 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s' }}></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-primary-50/70 via-primary-100/65 to-primary-50/70 dark:from-primary-900/24 dark:via-primary-800/20 dark:to-primary-700/18"></div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-primary-200/35 dark:bg-primary-800/25 rounded-full blur-3xl animate-float"></div>
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-primary-100/35 dark:bg-primary-700/25 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s' }}></div>
           
           <div className="relative z-10">
             <div className="relative mb-8">
-              <div className="absolute inset-0 bg-primary-300/50 dark:bg-primary-700/50 rounded-full blur-3xl opacity-60 animate-pulse-slow"></div>
+              <div className="absolute inset-0 bg-primary-300/55 dark:bg-primary-700/50 rounded-full blur-3xl opacity-60 animate-pulse-slow"></div>
               <div className="relative text-9xl animate-bounce-slow drop-shadow-2xl">📊</div>
             </div>
             <h3 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
@@ -1762,12 +1849,12 @@ const DashboardPage = () => {
 
             // Her kart için farklı gradient renkleri
             const cardColors = [
-              { bg: 'from-blue-500 to-cyan-500', border: 'border-blue-300', icon: 'bg-blue-100' },
-              { bg: 'from-purple-500 to-pink-500', border: 'border-purple-300', icon: 'bg-purple-100' },
-              { bg: 'from-green-500 to-emerald-500', border: 'border-green-300', icon: 'bg-green-100' },
-              { bg: 'from-orange-500 to-red-500', border: 'border-orange-300', icon: 'bg-orange-100' },
-              { bg: 'from-indigo-500 to-blue-500', border: 'border-indigo-300', icon: 'bg-indigo-100' },
-              { bg: 'from-pink-500 to-rose-500', border: 'border-pink-300', icon: 'bg-pink-100' },
+              { bg: 'from-primary-500 to-primary-300', border: 'border-stone-200', icon: 'bg-stone-50' },
+              { bg: 'from-primary-600 to-primary-400', border: 'border-stone-300', icon: 'bg-stone-100' },
+              { bg: 'from-primary-500 to-amber-200', border: 'border-amber-200', icon: 'bg-amber-50' },
+              { bg: 'from-primary-700 to-primary-500', border: 'border-primary-200', icon: 'bg-primary-50' },
+              { bg: 'from-stone-600 to-primary-500', border: 'border-stone-300', icon: 'bg-stone-100' },
+              { bg: 'from-primary-500 to-stone-400', border: 'border-stone-200', icon: 'bg-stone-50' },
             ]
             const colorIndex = index % cardColors.length
             const cardColor = cardColors[colorIndex]

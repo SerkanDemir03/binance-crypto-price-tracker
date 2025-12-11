@@ -9,16 +9,16 @@ export default {
     extend: {
       colors: {
         primary: {
-          50: '#f0f9ff',
-          100: '#e0f2fe',
-          200: '#bae6fd',
-          300: '#7dd3fc',
-          400: '#38bdf8',
-          500: '#0ea5e9',
-          600: '#0284c7',
-          700: '#0369a1',
-          800: '#075985',
-          900: '#0c4a6e',
+          50: '#f4f2ef',
+          100: '#e9e6e2',
+          200: '#d6d1cb',
+          300: '#c1b8ae',
+          400: '#a99e92',
+          500: '#8a817c', // light theme anchor
+          600: '#736b66',
+          700: '#5c5652',
+          800: '#463f3a', // dark theme anchor
+          900: '#352f2b',
         },
         crypto: {
           gold: '#f59e0b',

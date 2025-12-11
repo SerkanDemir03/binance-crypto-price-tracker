@@ -662,35 +662,57 @@ exports.getPricesByCustomSymbols = asyncHandler(async (req, res) => {
 
 /**
  * Coin ID ile direkt fiyat çeker (arama sonuçlarından gelen coin'ler için)
+ * CoinGecko'dan coin detaylarını çekip doğru symbol'ü kullanır
  */
 exports.getPriceByCoinId = asyncHandler(async (req, res) => {
   const { coinId, symbol, saveToDb = false } = req.body;
   
-  if (!coinId || !symbol) {
-    throw new AppError('coinId ve symbol parametreleri gerekli', 400);
+  if (!coinId) {
+    throw new AppError('coinId parametresi gerekli', 400);
   }
 
   try {
-    // CoinGecko API'den direkt fiyat çek (ID ile)
-    const response = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
+    // CoinGecko API'den coin detaylarını çek (ID ile) - doğru symbol'ü almak için
+    const coinDetailResponse = await axios.get(`https://api.coingecko.com/api/v3/coins/${coinId}`, {
       params: {
-        ids: coinId,
-        vs_currencies: 'usd'
+        localization: false,
+        tickers: false,
+        market_data: true,
+        community_data: false,
+        developer_data: false,
+        sparkline: false
       },
       timeout: 10000
     });
 
-    if (response.status === 200 && response.data[coinId]) {
-      const price = parseFloat(response.data[coinId].usd);
-      const symbolUpper = symbol.toUpperCase();
+    if (coinDetailResponse.status === 200 && coinDetailResponse.data) {
+      const coinData = coinDetailResponse.data;
+      
+      // CoinGecko'dan gelen doğru symbol'ü kullan (büyük harfe çevir)
+      const correctSymbol = coinData.symbol ? coinData.symbol.toUpperCase() : (symbol ? symbol.toUpperCase() : null);
+      
+      if (!correctSymbol) {
+        throw new Error('Symbol bilgisi alınamadı');
+      }
+
+      // Fiyat bilgisini al
+      const price = coinData.market_data?.current_price?.usd 
+        ? parseFloat(coinData.market_data.current_price.usd)
+        : null;
+
+      if (!price) {
+        throw new Error('Fiyat bilgisi alınamadı');
+      }
+
+      logger.info(`✅ Coin detayları alındı - ID: ${coinId}, Symbol: ${correctSymbol}, Price: ${price}`);
       
       // Eğer saveToDb true ise, veritabanına kaydet
       if (saveToDb) {
         try {
           await databaseService.createTable();
-          const dbSymbol = symbolUpper + 'USDT';
+          const dbSymbol = correctSymbol + 'USDT';
           await databaseService.savePrice(dbSymbol, price);
-          logger.info(`✅ ${dbSymbol} coin'i veritabanına kaydedildi (ID: ${coinId})`);
+          logger.info(`✅ ${dbSymbol} coin'i veritabanına kaydedildi (ID: ${coinId}, Symbol: ${correctSymbol})`);
         } catch (dbError) {
           logger.warn(`⚠️ Coin veritabanına kaydedilemedi: ${dbError.message}`);
         }
@@ -699,19 +721,20 @@ exports.getPriceByCoinId = asyncHandler(async (req, res) => {
       res.status(200).json({
         status: 'success',
         data: {
-          symbol: symbolUpper,
+          symbol: correctSymbol,
           coinId: coinId,
+          coinName: coinData.name || null,
           price: price,
           valid: true,
           savedToDb: saveToDb
         }
       });
     } else {
-      throw new Error(`${symbol} için fiyat bulunamadı`);
+      throw new Error(`${coinId} için coin detayları bulunamadı`);
     }
   } catch (error) {
-    logger.error(`Error fetching price by coin ID for ${symbol}:`, error);
-    throw new AppError(`${symbol} için fiyat çekilemedi: ${error.message}`, 400);
+    logger.error(`Error fetching price by coin ID for ${coinId}:`, error);
+    throw new AppError(`${coinId} için fiyat çekilemedi: ${error.message}`, 400);
   }
 });
 
