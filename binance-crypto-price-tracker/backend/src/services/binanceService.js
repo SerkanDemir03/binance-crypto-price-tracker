@@ -1,6 +1,8 @@
 const axios = require('axios');
 const { BINANCE_API_URL, CRYPTO_SYMBOLS } = require('../config/constants');
 const logger = require('../utils/logger');
+const cacheService = require('./cacheService');
+const rateLimitService = require('./rateLimitService');
 
 class BinanceService {
   /**
@@ -9,13 +11,26 @@ class BinanceService {
    * Retry mekanizması ile 429 hatası durumunda otomatik tekrar dener
    */
   async getAllPrices(maxRetries = 3) {
+    // Check cache first
+    const cacheKey = cacheService.generateKey('binance', 'all-prices');
+    const cached = cacheService.get(cacheKey);
+    if (cached) {
+      logger.info('✅ Binance fiyatları cache\'den alındı');
+      return cached;
+    }
+
+    // Check rate limit
+    if (!rateLimitService.canMakeRequest('binance', 2000)) {
+      await rateLimitService.waitForBackoff('binance');
+    }
+
     let lastError = null;
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         if (attempt > 0) {
           // Exponential backoff: 2^attempt saniye bekle
-          const waitTime = Math.pow(2, attempt) * 1000;
+          const waitTime = rateLimitService.getBackoffDelay(attempt);
           logger.info(`⏳ Rate limit nedeniyle ${waitTime/1000} saniye bekleniyor... (Deneme ${attempt + 1}/${maxRetries})`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
         }
@@ -39,6 +54,11 @@ class BinanceService {
             }));
 
           logger.info(`✅ ${filteredPrices.length} kripto para fiyatı batch endpoint'den alındı`);
+          
+          // Cache the result (1 minute TTL)
+          cacheService.set(cacheKey, filteredPrices, 60 * 1000);
+          rateLimitService.recordSuccess('binance');
+          
           return filteredPrices;
         }
 
@@ -50,17 +70,17 @@ class BinanceService {
         lastError = error;
         
         if (error.response?.status === 429) {
-          const retryAfter = error.response.headers['retry-after'] || Math.pow(2, attempt);
-          logger.warn(`⚠️ Rate limit hatası (429). ${retryAfter} saniye sonra tekrar denenecek... (Deneme ${attempt + 1}/${maxRetries})`);
+          const retryAfter = parseInt(error.response.headers['retry-after']) || null;
+          rateLimitService.recordRateLimit('binance', retryAfter);
           
           if (attempt < maxRetries - 1) {
-            // Son deneme değilse, retry-after süresi kadar bekle
-            await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+            // Son deneme değilse, backoff süresi kadar bekle
+            await rateLimitService.waitForBackoff('binance');
             continue; // Tekrar dene
           } else {
             // Son deneme de başarısız oldu
             logger.error('❌ Tüm denemeler başarısız oldu. Rate limit aşıldı.');
-            throw new Error(`Binance API rate limit aşıldı. Lütfen ${retryAfter} saniye sonra tekrar deneyin.`);
+            throw new Error(`Binance API rate limit aşıldı. Lütfen birkaç saniye sonra tekrar deneyin.`);
           }
         } else if (error.response?.status >= 500) {
           // Sunucu hatası, tekrar dene

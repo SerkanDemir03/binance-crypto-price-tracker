@@ -1,6 +1,8 @@
 const axios = require('axios');
 const { CRYPTO_SYMBOLS } = require('../config/constants');
 const logger = require('../utils/logger');
+const cacheService = require('./cacheService');
+const rateLimitService = require('./rateLimitService');
 
 // CoinGecko API URL
 const COINGECKO_API_URL = 'https://api.coingecko.com/api/v3/simple/price';
@@ -79,6 +81,19 @@ class CoinGeckoService {
    * Tek istekle tüm fiyatları alır
    */
   async getAllPrices() {
+    // Check cache first
+    const cacheKey = cacheService.generateKey('coingecko', 'all-prices');
+    const cached = cacheService.get(cacheKey);
+    if (cached) {
+      logger.info('✅ CoinGecko fiyatları cache\'den alındı');
+      return cached;
+    }
+
+    // Check rate limit (CoinGecko: 50 calls/minute)
+    if (!rateLimitService.canMakeRequest('coingecko', 1200)) {
+      await rateLimitService.waitForBackoff('coingecko');
+    }
+
     try {
       // Tüm CoinGecko ID'lerini topla
       const coinIds = CRYPTO_SYMBOLS
@@ -121,12 +136,19 @@ class CoinGeckoService {
         }
 
         logger.info(`✅ ${prices.length} kripto para fiyatı CoinGecko API'den alındı`);
+        
+        // Cache the result (1 minute TTL)
+        cacheService.set(cacheKey, prices, 60 * 1000);
+        rateLimitService.recordSuccess('coingecko');
+        
         return prices;
       }
 
       return [];
     } catch (error) {
       if (error.response?.status === 429) {
+        const retryAfter = parseInt(error.response.headers['retry-after']) || null;
+        rateLimitService.recordRateLimit('coingecko', retryAfter);
         logger.warn('⚠️ CoinGecko API rate limit aşıldı (429). Lütfen birkaç saniye bekleyin.');
         throw new Error('CoinGecko API rate limit aşıldı. Lütfen birkaç saniye sonra tekrar deneyin.');
       } else if (error.response?.status === 404) {

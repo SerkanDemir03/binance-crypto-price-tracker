@@ -154,6 +154,26 @@ export const cryptoAPI = {
   updateCoinMetadata: (symbol, metadata) => api.put(`/crypto/metadata/${symbol}`, metadata),
   
   invalidateMetadataCache: (symbol) => api.post('/crypto/metadata/invalidate', { symbol }),
+
+  // Notes API
+  createNote: (noteData) => api.post('/crypto/notes', noteData),
+  getNotes: (userId = 'default', filters = {}) => {
+    const params = { userId, ...filters }
+    return api.get('/crypto/notes', { params })
+  },
+  getNoteById: (id, userId = 'default') => api.get(`/crypto/notes/${id}`, { params: { userId } }),
+  updateNote: (id, noteData) => api.put(`/crypto/notes/${id}`, noteData),
+  deleteNote: (id, userId = 'default') => api.delete(`/crypto/notes/${id}`, { params: { userId } }),
+  getNotesByCoin: (symbol, userId = 'default') => api.get(`/crypto/notes/coin/${symbol}`, { params: { userId } }),
+
+  // News API
+  getAllNews: (limit = 30) => api.get('/crypto/news', { params: { limit } }),
+  getNewsByCoin: (symbol, limit = 20) => api.get(`/crypto/news/coin/${symbol}`, { params: { limit } }),
+
+  // Calculator API
+  calculateProfitLoss: (data) => api.post('/crypto/calculator/profit-loss', data),
+  calculateROI: (data) => api.post('/crypto/calculator/roi', data),
+  convertCurrency: (data) => api.post('/crypto/calculator/convert', data),
 }
 
 export default api

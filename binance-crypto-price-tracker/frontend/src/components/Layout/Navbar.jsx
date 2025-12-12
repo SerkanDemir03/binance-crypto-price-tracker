@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { TrendingUp, Sparkles, Database, Moon, Sun } from 'lucide-react'
+import { TrendingUp, Sparkles, Database, Moon, Sun, FileText, Calculator, Newspaper } from 'lucide-react'
 import { useTheme } from '../../contexts/ThemeContext'
 
 const Navbar = () => {
@@ -38,6 +38,27 @@ const Navbar = () => {
             >
               <Database className="w-4 h-4" />
               Veritabanı
+            </Link>
+            <Link
+              to="/notes"
+              className="px-4 py-2 text-white hover:text-yellow-200 dark:hover:text-yellow-300 transition-colors font-medium rounded-lg hover:bg-white/10 flex items-center gap-2"
+            >
+              <FileText className="w-4 h-4" />
+              Notlar
+            </Link>
+            <Link
+              to="/calculator"
+              className="px-4 py-2 text-white hover:text-yellow-200 dark:hover:text-yellow-300 transition-colors font-medium rounded-lg hover:bg-white/10 flex items-center gap-2"
+            >
+              <Calculator className="w-4 h-4" />
+              Hesap Makinesi
+            </Link>
+            <Link
+              to="/news"
+              className="px-4 py-2 text-white hover:text-yellow-200 dark:hover:text-yellow-300 transition-colors font-medium rounded-lg hover:bg-white/10 flex items-center gap-2"
+            >
+              <Newspaper className="w-4 h-4" />
+              Haberler
             </Link>
             
             {/* Theme Toggle Button */}

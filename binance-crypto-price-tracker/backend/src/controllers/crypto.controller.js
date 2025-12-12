@@ -5,6 +5,8 @@ const coingeckoService = require('../services/coingeckoService');
 const databaseService = require('../services/databaseService');
 const schedulerService = require('../services/schedulerService');
 const MetadataService = require('../services/metadataService');
+const notesService = require('../services/notesService');
+const newsService = require('../services/newsService');
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
 const { DEFAULT_API_PROVIDER } = require('../config/constants');
@@ -505,9 +507,11 @@ exports.checkApiHealth = asyncHandler(async (req, res) => {
  * Veritabanı durumunu ve coin ekleme işlemlerini kontrol eder
  */
 exports.checkDatabaseStatus = asyncHandler(async (req, res) => {
+  const pool = require('../config/database');
   const dbStatus = await databaseService.testConnection();
   const coinCount = await databaseService.getCoinCount();
   const tableExists = await databaseService.checkTableExists();
+  const poolStats = pool.getPoolStats ? pool.getPoolStats() : null;
   
   res.status(200).json({
     status: 'success',
@@ -518,6 +522,7 @@ exports.checkDatabaseStatus = asyncHandler(async (req, res) => {
       tableExists: tableExists,
       coinCount: coinCount,
       tableName: require('../config/constants').TABLE_NAME,
+      poolStats: poolStats,
       message: dbStatus.connected 
         ? `Veritabanı aktif ve çalışıyor. ${coinCount} farklı coin takip ediliyor.`
         : 'Veritabanı bağlantısı başarısız!'
@@ -1013,5 +1018,194 @@ exports.invalidateMetadataCache = asyncHandler(async (req, res) => {
     logger.error(`Error invalidating cache for ${symbol}:`, error);
     throw new AppError(`Cache temizlenirken hata oluştu: ${error.message}`, 500);
   }
+});
+
+/**
+ * Notes endpoints
+ */
+exports.createNote = asyncHandler(async (req, res) => {
+  const userId = req.body.userId || 'default';
+  const noteData = req.body;
+  
+  const note = await notesService.createNote(userId, noteData);
+  
+  res.status(201).json({
+    status: 'success',
+    message: 'Not başarıyla oluşturuldu',
+    data: note
+  });
+});
+
+exports.getNotes = asyncHandler(async (req, res) => {
+  const userId = req.query.userId || 'default';
+  const filters = {
+    coinSymbol: req.query.coinSymbol,
+    search: req.query.search,
+    limit: parseInt(req.query.limit) || 100,
+    offset: parseInt(req.query.offset) || 0
+  };
+  
+  const notes = await notesService.getNotes(userId, filters);
+  
+  res.status(200).json({
+    status: 'success',
+    data: notes,
+    count: notes.length
+  });
+});
+
+exports.getNoteById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.query.userId || 'default';
+  
+  const note = await notesService.getNoteById(id, userId);
+  
+  res.status(200).json({
+    status: 'success',
+    data: note
+  });
+});
+
+exports.updateNote = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.body.userId || 'default';
+  const noteData = req.body;
+  
+  const note = await notesService.updateNote(id, userId, noteData);
+  
+  res.status(200).json({
+    status: 'success',
+    message: 'Not başarıyla güncellendi',
+    data: note
+  });
+});
+
+exports.deleteNote = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.query.userId || 'default';
+  
+  await notesService.deleteNote(id, userId);
+  
+  res.status(200).json({
+    status: 'success',
+    message: 'Not başarıyla silindi'
+  });
+});
+
+exports.getNotesByCoin = asyncHandler(async (req, res) => {
+  const { symbol } = req.params;
+  const userId = req.query.userId || 'default';
+  
+  const notes = await notesService.getNotesByCoin(symbol, userId);
+  
+  res.status(200).json({
+    status: 'success',
+    data: notes,
+    count: notes.length
+  });
+});
+
+/**
+ * News endpoints
+ */
+exports.getAllNews = asyncHandler(async (req, res) => {
+  const limit = parseInt(req.query.limit) || 30;
+  
+  const news = await newsService.getAllNews(limit);
+  
+  res.status(200).json({
+    status: 'success',
+    data: news,
+    count: news.length
+  });
+});
+
+exports.getNewsByCoin = asyncHandler(async (req, res) => {
+  const { symbol } = req.params;
+  const limit = parseInt(req.query.limit) || 20;
+  
+  const news = await newsService.searchNewsByCoin(symbol, limit);
+  
+  res.status(200).json({
+    status: 'success',
+    data: news,
+    count: news.length
+  });
+});
+
+/**
+ * Calculator endpoints
+ */
+exports.calculateProfitLoss = asyncHandler(async (req, res) => {
+  const { buyPrice, sellPrice, quantity, fees = 0 } = req.body;
+  
+  if (!buyPrice || !sellPrice || !quantity) {
+    throw new AppError('buyPrice, sellPrice ve quantity parametreleri gerekli', 400);
+  }
+  
+  const buyTotal = buyPrice * quantity;
+  const sellTotal = sellPrice * quantity;
+  const totalFees = (buyTotal + sellTotal) * (fees / 100);
+  const profitLoss = sellTotal - buyTotal - totalFees;
+  const profitLossPercent = ((profitLoss / buyTotal) * 100).toFixed(2);
+  
+  res.status(200).json({
+    status: 'success',
+    data: {
+      buyPrice,
+      sellPrice,
+      quantity,
+      buyTotal,
+      sellTotal,
+      totalFees,
+      profitLoss,
+      profitLossPercent: parseFloat(profitLossPercent),
+      isProfit: profitLoss > 0
+    }
+  });
+});
+
+exports.calculateROI = asyncHandler(async (req, res) => {
+  const { initialInvestment, currentValue, fees = 0 } = req.body;
+  
+  if (!initialInvestment || !currentValue) {
+    throw new AppError('initialInvestment ve currentValue parametreleri gerekli', 400);
+  }
+  
+  const netValue = currentValue - (currentValue * fees / 100);
+  const roi = ((netValue - initialInvestment) / initialInvestment) * 100;
+  const profitLoss = netValue - initialInvestment;
+  
+  res.status(200).json({
+    status: 'success',
+    data: {
+      initialInvestment,
+      currentValue,
+      netValue,
+      profitLoss,
+      roi: parseFloat(roi.toFixed(2)),
+      isProfit: profitLoss > 0
+    }
+  });
+});
+
+exports.convertCurrency = asyncHandler(async (req, res) => {
+  const { amount, fromPrice, toPrice } = req.body;
+  
+  if (!amount || !fromPrice || !toPrice) {
+    throw new AppError('amount, fromPrice ve toPrice parametreleri gerekli', 400);
+  }
+  
+  const convertedAmount = (amount * fromPrice) / toPrice;
+  
+  res.status(200).json({
+    status: 'success',
+    data: {
+      amount,
+      fromPrice,
+      toPrice,
+      convertedAmount: parseFloat(convertedAmount.toFixed(8))
+    }
+  });
 });
 

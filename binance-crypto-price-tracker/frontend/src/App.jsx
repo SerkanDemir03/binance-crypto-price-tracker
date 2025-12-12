@@ -6,6 +6,9 @@ import Layout from './components/Layout/Layout'
 import DashboardPage from './pages/Dashboard/DashboardPage'
 import CryptoDetailPage from './pages/CryptoDetail/CryptoDetailPage'
 import DatabaseManagementPage from './pages/Database/DatabaseManagementPage'
+import NotesPage from './pages/Notes/NotesPage'
+import CalculatorPage from './pages/Calculator/CalculatorPage'
+import NewsPage from './pages/News/NewsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,6 +31,9 @@ function App() {
               <Route index element={<DashboardPage />} />
               <Route path="crypto/:symbol" element={<CryptoDetailPage />} />
               <Route path="database" element={<DatabaseManagementPage />} />
+              <Route path="notes" element={<NotesPage />} />
+              <Route path="calculator" element={<CalculatorPage />} />
+              <Route path="news" element={<NewsPage />} />
             </Route>
           </Routes>
         </Router>

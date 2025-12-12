@@ -133,4 +133,21 @@ router.get('/metadata/:symbol', cryptoController.getCoinMetadata);
 router.put('/metadata/:symbol', cryptoController.updateCoinMetadata);
 router.post('/metadata/invalidate', cryptoController.invalidateMetadataCache);
 
+// Notes routes
+router.post('/notes', cryptoController.createNote);
+router.get('/notes', cryptoController.getNotes);
+router.get('/notes/:id', cryptoController.getNoteById);
+router.put('/notes/:id', cryptoController.updateNote);
+router.delete('/notes/:id', cryptoController.deleteNote);
+router.get('/notes/coin/:symbol', cryptoController.getNotesByCoin);
+
+// News routes
+router.get('/news', cryptoController.getAllNews);
+router.get('/news/coin/:symbol', cryptoController.getNewsByCoin);
+
+// Calculator routes
+router.post('/calculator/profit-loss', cryptoController.calculateProfitLoss);
+router.post('/calculator/roi', cryptoController.calculateROI);
+router.post('/calculator/convert', cryptoController.convertCurrency);
+
 module.exports = router;
