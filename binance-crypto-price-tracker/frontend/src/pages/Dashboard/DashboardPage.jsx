@@ -633,7 +633,7 @@ const COIN_TECHNICAL_INFO = {
   }
 }
 
-// Coin Search Results Component (fiyat gösterimi için)
+// Coin Search Results Component (fiyat gösterimi için) - Modern Design
 const CoinSearchResults = ({ results, customCoins, onAddCoin, formatPrice }) => {
   const [priceMap, setPriceMap] = useState({})
   const [loadingPrices, setLoadingPrices] = useState({})
@@ -655,7 +655,7 @@ const CoinSearchResults = ({ results, customCoins, onAddCoin, formatPrice }) => 
   }
 
   return (
-    <div className="max-h-64 overflow-y-auto space-y-2 mb-4">
+    <div className="max-h-64 overflow-y-auto space-y-2 mb-6 custom-scrollbar">
       {results.map((coin) => {
         const isAdded = customCoins.includes(coin.symbol.toUpperCase())
         const price = priceMap[coin.id]
@@ -664,32 +664,39 @@ const CoinSearchResults = ({ results, customCoins, onAddCoin, formatPrice }) => 
         return (
           <button
             key={coin.id}
-            onClick={() => !isAdded && onAddCoin(coin)} // Coin objesini gönder
+            onClick={() => !isAdded && onAddCoin(coin)}
             onMouseEnter={() => !price && !isLoading && loadPrice(coin.symbol, coin.id)}
             disabled={isAdded}
-            className={`w-full flex items-center space-x-3 p-3 rounded-xl border-2 transition-all hover:shadow-lg ${
+            className={`group w-full flex items-center space-x-3 p-3.5 rounded-xl border-2 transition-all duration-200 ${
               isAdded
-                ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                : 'border-gray-200 hover:border-primary-500 hover:bg-primary-50'
+                ? 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 opacity-60 cursor-not-allowed'
+                : 'border-gray-200 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 bg-white dark:bg-gray-800 shadow-sm hover:shadow-md'
             }`}
           >
             {coin.thumb && (
-              <img src={coin.thumb} alt={coin.name} className="w-8 h-8 rounded-full" />
+              <div className="flex-shrink-0">
+                <img src={coin.thumb} alt={coin.name} className="w-10 h-10 rounded-full border-2 border-gray-200 dark:border-gray-700" />
+              </div>
             )}
-            <div className="flex-1 text-left">
-              <div className="font-semibold text-gray-900 dark:text-gray-100">{coin.name}</div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">{coin.symbol.toUpperCase()}</div>
+            <div className="flex-1 text-left min-w-0">
+              <div className="font-semibold text-gray-900 dark:text-gray-100 truncate">{coin.name}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">{coin.symbol.toUpperCase()}</div>
               {price && (
-                <div className="text-xs font-semibold text-primary-600 mt-1">
+                <div className="text-xs font-bold text-primary-600 dark:text-primary-400 mt-1">
                   ${formatPrice(price)}
                 </div>
               )}
               {isLoading && (
-                <div className="text-xs text-gray-400 mt-1">Fiyat yükleniyor...</div>
+                <div className="text-xs text-gray-400 dark:text-gray-500 mt-1 flex items-center space-x-1">
+                  <div className="w-3 h-3 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+                  <span>Fiyat yükleniyor...</span>
+                </div>
               )}
             </div>
             {isAdded && (
-              <span className="text-xs text-gray-400">Ekli</span>
+              <div className="flex-shrink-0 px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg text-xs font-semibold">
+                Ekli
+              </div>
             )}
           </button>
         )
@@ -833,7 +840,16 @@ const DashboardPage = () => {
       })
     }
     
-    return filteredPrices
+    // Fiyata göre sırala (yüksekten düşüğe) - piyasa sıralaması için
+    // Fiyatı olmayan coin'ler en sona
+    return filteredPrices.sort((a, b) => {
+      if (a._isLoading && !b._isLoading) return 1
+      if (!a._isLoading && b._isLoading) return -1
+      if (!a.price && b.price) return 1
+      if (a.price && !b.price) return -1
+      if (!a.price && !b.price) return 0
+      return (b.price || 0) - (a.price || 0)
+    })
   }, [pricesData, allDisplayCoins, customCoins, isLoading])
 
   useEffect(() => {
@@ -1625,114 +1641,163 @@ const DashboardPage = () => {
             </p>
           </div>
           
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Coin Ekleme Butonu */}
-            <button
-              onClick={() => setShowAddCoinModal(true)}
-              className="group flex items-center space-x-2 px-4 py-2.5 bg-white/20 backdrop-blur-md text-white/90 rounded-lg hover:bg-white/30 transition-all duration-200 shadow-sm hover:shadow-md font-medium text-sm border border-white/20 hover:border-white/30"
-            >
-              <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
-              <span>Coin Ekle</span>
-            </button>
-            
-            {/* Coin Bilgisi */}
-            <div className="flex items-center space-x-2 bg-white/15 backdrop-blur-md rounded-lg px-4 py-2 border border-white/20 shadow-sm">
-              <span className="text-xs font-medium text-white/80">
-                {DEFAULT_BINANCE_COINS.length} varsayılan + {customCoins.length} özel = <span className="text-white/90 font-semibold">{allDisplayCoins.length}</span> coin
-              </span>
-            </div>
-            
-            {/* Custom Coin Temizleme */}
-            {customCoins.length > 0 && (
+          {/* Modern Control Panel */}
+          <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
+            {/* Left Side - Coin Management */}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Coin Ekleme Butonu - Modern Design */}
               <button
-                onClick={() => {
-                  if (confirm('Tüm özel coin\'leri kaldırmak istediğinize emin misiniz?')) {
-                    setCustomCoins([])
-                    toast.success('Tüm özel coin\'ler kaldırıldı')
-                  }
-                }}
-                className="group flex items-center space-x-2 bg-white/15 backdrop-blur-md rounded-lg px-3 py-2 text-white/80 hover:bg-white/25 transition-all duration-200 text-xs font-medium border border-white/20 hover:border-white/30 shadow-sm"
-                title="Özel coin'leri temizle"
+                onClick={() => setShowAddCoinModal(true)}
+                className="group relative flex items-center space-x-2 px-5 py-3 bg-gradient-to-r from-primary-500 to-primary-600 dark:from-primary-600 dark:to-primary-700 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 dark:hover:from-primary-700 dark:hover:to-primary-800 transition-all duration-300 shadow-lg hover:shadow-xl font-semibold text-sm border border-primary-400/30 dark:border-primary-500/30 overflow-hidden"
               >
-                <X className="w-3.5 h-3.5 group-hover:rotate-90 transition-transform duration-300" />
-                <span>Özel Coin'leri Temizle</span>
+                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                <Plus className="w-5 h-5 relative z-10 group-hover:rotate-90 transition-transform duration-300" />
+                <span className="relative z-10">Coin Ekle</span>
               </button>
-            )}
-            
-            {/* API Provider Seçimi */}
-            <div className="flex items-center space-x-2 bg-white/15 backdrop-blur-md rounded-lg px-3 py-2 border border-white/20 shadow-sm">
-              <label className="text-xs font-medium text-white/70">API:</label>
-              <select
-                value={apiProvider}
-                onChange={(e) => {
-                  const newProvider = e.target.value
-                  const oldProvider = apiProvider
-                  setApiProvider(newProvider)
-                  setCooldownSeconds(0)
-                  setCooldownResetTime(null)
-                  setIsFetching(false)
-                  if (oldProvider !== newProvider) {
-                    toast.success(
-                      `API değiştirildi: ${newProvider === 'binance' ? 'Binance' : 'CoinGecko'}. Rate limit sıfırlandı.`,
-                      { duration: 3000 }
-                    )
-                  }
-                }}
-                disabled={isFetching}
-                className="bg-white/30 text-white/90 rounded-md px-2 py-1 text-xs font-medium border border-white/30 focus:outline-none focus:ring-1 focus:ring-white/50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm"
-              >
-                <option value="binance" className="text-gray-900">Binance (Varsayılan)</option>
-                <option value="coingecko" className="text-gray-900">CoinGecko (50/dk)</option>
-              </select>
-            </div>
-            <button
-              onClick={handleFetchPrices}
-              disabled={isFetching || cooldownSeconds > 0}
-              className={`group flex items-center space-x-2 px-4 py-2.5 rounded-lg transition-all duration-200 shadow-sm font-medium text-sm ${
-                isFetching || cooldownSeconds > 0
-                  ? 'bg-white/20 text-white/50 cursor-not-allowed border border-white/10'
-                  : 'bg-white/25 text-white/90 hover:bg-white/35 hover:shadow-md border border-white/30'
-              }`}
-            >
-              <RefreshCw 
-                className={`w-4 h-4 transition-transform duration-300 ${
-                  isFetching ? 'animate-spin' : 'group-hover:rotate-180'
-                }`} 
-              />
-              <span>
-                {isFetching 
-                  ? 'Güncelleniyor...' 
-                  : cooldownSeconds > 0 
-                    ? `Bekle (${cooldownSeconds}s)` 
-                    : 'Fiyatları Güncelle'
-                }
-              </span>
-            </button>
-            {cooldownSeconds > 0 && (
-              <div className="flex items-center space-x-2 text-white text-sm font-semibold bg-yellow-500/30 backdrop-blur-sm px-3 py-2 rounded-lg border border-yellow-400/50 shadow-lg">
-                <div className="w-2.5 h-2.5 bg-yellow-400 rounded-full animate-pulse shadow-lg"></div>
-                <span className="drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">Rate limit koruması aktif</span>
+              
+              {/* Coin İstatistikleri - Modern Badge */}
+              <div className="flex items-center space-x-2 bg-white/10 dark:bg-gray-800/40 backdrop-blur-lg rounded-xl px-4 py-2.5 border border-white/20 dark:border-gray-700/50 shadow-md">
+                <div className="flex items-center space-x-1.5">
+                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                  <span className="text-xs font-semibold text-white/90">
+                    <span className="text-white/70">{DEFAULT_BINANCE_COINS.length}</span> varsayılan
+                  </span>
+                  <span className="text-white/50">+</span>
+                  <span className="text-xs font-semibold text-white/90">
+                    <span className="text-white/70">{customCoins.length}</span> özel
+                  </span>
+                  <span className="text-white/50">=</span>
+                  <span className="text-sm font-bold text-white">{allDisplayCoins.length}</span>
+                  <span className="text-xs text-white/70">coin</span>
+                </div>
               </div>
-            )}
+              
+              {/* Custom Coin Temizleme - Modern Design */}
+              {customCoins.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (confirm('Tüm özel coin\'leri kaldırmak istediğinize emin misiniz?')) {
+                      setCustomCoins([])
+                      toast.success('Tüm özel coin\'ler kaldırıldı')
+                    }
+                  }}
+                  className="group flex items-center space-x-2 px-4 py-2.5 bg-white/10 dark:bg-gray-800/40 backdrop-blur-lg rounded-xl text-white/90 hover:bg-white/20 dark:hover:bg-gray-800/60 transition-all duration-300 text-xs font-semibold border border-white/20 dark:border-gray-700/50 shadow-md hover:shadow-lg"
+                  title="Özel coin'leri temizle"
+                >
+                  <X className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
+                  <span>Temizle</span>
+                </button>
+              )}
+            </div>
+            
+            {/* Right Side - API & Actions */}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* API Provider Seçimi - Modern Design */}
+              <div className="relative group">
+                <div className="flex items-center space-x-2 bg-white/10 dark:bg-gray-800/40 backdrop-blur-lg rounded-xl px-4 py-2.5 border border-white/20 dark:border-gray-700/50 shadow-md">
+                  <label className="text-xs font-semibold text-white/70 flex items-center space-x-1">
+                    <span>API</span>
+                    <span className="text-white/50">:</span>
+                  </label>
+                  <select
+                    value={apiProvider}
+                    onChange={(e) => {
+                      const newProvider = e.target.value
+                      const oldProvider = apiProvider
+                      setApiProvider(newProvider)
+                      setCooldownSeconds(0)
+                      setCooldownResetTime(null)
+                      setIsFetching(false)
+                      if (oldProvider !== newProvider) {
+                        toast.success(
+                          `API değiştirildi: ${newProvider === 'binance' ? 'Binance' : 'CoinGecko'}. Rate limit sıfırlandı.`,
+                          { duration: 3000 }
+                        )
+                      }
+                    }}
+                    disabled={isFetching}
+                    className="bg-white/20 dark:bg-gray-700/50 text-white font-semibold rounded-lg px-3 py-1.5 text-xs border border-white/30 dark:border-gray-600/50 focus:outline-none focus:ring-2 focus:ring-primary-400/50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm appearance-none pr-8 hover:bg-white/30 dark:hover:bg-gray-700/70 transition-colors"
+                  >
+                    <option value="binance" className="bg-gray-800 text-white">Binance</option>
+                    <option value="coingecko" className="bg-gray-800 text-white">CoinGecko</option>
+                  </select>
+                  <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Fiyatları Güncelle Butonu - Modern Design */}
+              <button
+                onClick={handleFetchPrices}
+                disabled={isFetching || cooldownSeconds > 0}
+                className={`group relative flex items-center space-x-2 px-5 py-3 rounded-xl transition-all duration-300 shadow-lg font-semibold text-sm overflow-hidden ${
+                  isFetching || cooldownSeconds > 0
+                    ? 'bg-white/10 dark:bg-gray-800/40 text-white/50 cursor-not-allowed border border-white/10 dark:border-gray-700/30'
+                    : 'bg-white/20 dark:bg-gray-800/40 text-white hover:bg-white/30 dark:hover:bg-gray-800/60 border border-white/30 dark:border-gray-700/50 hover:shadow-xl'
+                }`}
+              >
+                {!isFetching && cooldownSeconds === 0 && (
+                  <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                )}
+                <RefreshCw 
+                  className={`w-5 h-5 relative z-10 transition-transform duration-300 ${
+                    isFetching ? 'animate-spin' : 'group-hover:rotate-180'
+                  }`} 
+                />
+                <span className="relative z-10">
+                  {isFetching 
+                    ? 'Güncelleniyor...' 
+                    : cooldownSeconds > 0 
+                      ? `Bekle (${cooldownSeconds}s)` 
+                      : 'Güncelle'
+                  }
+                </span>
+              </button>
+              
+              {/* Rate Limit Uyarısı - Modern Design */}
+              {cooldownSeconds > 0 && (
+                <div className="flex items-center space-x-2.5 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 dark:from-yellow-600/30 dark:to-orange-600/30 backdrop-blur-lg px-4 py-2.5 rounded-xl border border-yellow-400/30 dark:border-yellow-500/30 shadow-lg">
+                  <div className="relative">
+                    <div className="w-2.5 h-2.5 bg-yellow-400 dark:bg-yellow-500 rounded-full animate-pulse"></div>
+                    <div className="absolute inset-0 w-2.5 h-2.5 bg-yellow-400 dark:bg-yellow-500 rounded-full animate-ping opacity-60"></div>
+                  </div>
+                  <span className="text-xs font-semibold text-yellow-100 dark:text-yellow-200 drop-shadow-sm">
+                    Rate limit: {cooldownSeconds}s
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         
-        {/* Veritabanı Durumu Bilgisi */}
-        <div className="mt-6 bg-white/15 backdrop-blur-md rounded-lg px-4 py-3 text-white border border-white/20 shadow-sm">
-          <div className="flex items-center space-x-2.5">
-            <div className="relative">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <div className="absolute inset-0 w-2 h-2 bg-green-400 rounded-full animate-ping opacity-60"></div>
+        {/* Veritabanı Durumu Bilgisi - Modern Design */}
+        <div className="mt-6 bg-white/10 dark:bg-gray-800/40 backdrop-blur-lg rounded-xl px-5 py-4 text-white border border-white/20 dark:border-gray-700/50 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="relative">
+                <div className="w-3 h-3 bg-green-400 dark:bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-400/50"></div>
+                <div className="absolute inset-0 w-3 h-3 bg-green-400 dark:bg-green-500 rounded-full animate-ping opacity-60"></div>
+              </div>
+              <div>
+                <span className="text-sm font-semibold text-white/95">Veritabanı Aktif</span>
+                <span className="text-sm text-white/70 ml-2">
+                  {prices.length > 0 
+                    ? `• ${prices.length} coin takip ediliyor`
+                    : '• Hazır, coin ekleyebilirsiniz'
+                  }
+                </span>
+              </div>
             </div>
-            <span className="text-sm font-medium text-white/90">Veritabanı Aktif:</span>
-            <span className="text-sm text-white/70">
-              {prices.length > 0 
-                ? `${prices.length} coin veritabanında takip ediliyor`
-                : 'Veritabanı hazır, coin ekleyebilirsiniz'
-              }
-            </span>
+            <div className="hidden md:block">
+              <p className="text-xs text-white/60 font-medium">
+                Otomatik kayıt ve fiyat takibi aktif
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-white/60 mt-2 ml-4.5">
+          <p className="text-xs text-white/60 mt-3 ml-6 md:hidden">
             Coin eklediğinizde otomatik olarak veritabanına kaydedilir ve fiyatları takip edilir.
           </p>
         </div>
@@ -1788,35 +1853,60 @@ const DashboardPage = () => {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
-          {prices.map((crypto, index) => {
+        <div className="glass rounded-3xl shadow-2xl border-2 border-white/30 dark:border-gray-700/30 overflow-hidden bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl">
+          {/* Table Header */}
+          <div className="relative overflow-hidden bg-gradient-to-br from-primary-700 via-primary-600 to-primary-500 dark:from-[#071428] dark:via-[#07283b] dark:to-[#0b3650] px-6 py-4 gradient-animated">
+            {/* Subtle overlay for depth */}
+            <div className="absolute inset-0 bg-black/10 dark:bg-black/20"></div>
+            {/* Mesh gradient overlay */}
+            <div className="absolute inset-0 mesh-gradient opacity-30"></div>
+            {/* Content */}
+            <div className="relative z-10">
+              <h2 className="text-2xl font-bold text-white drop-shadow-lg">Kripto Para Fiyatları</h2>
+              <p className="text-white/90 text-sm mt-1">Piyasa sıralamasına göre listelenmiştir</p>
+            </div>
+          </div>
+          
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-full divide-y divide-gray-200/50 dark:divide-gray-700/50">
+              <thead className="bg-gray-100/80 dark:bg-gray-800/80 backdrop-blur-sm border-b-2 border-gray-200/50 dark:border-gray-700/50 sticky top-0 z-10">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">#</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Name</th>
+                  <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Price</th>
+                  <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">24h Change</th>
+                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Price Graph (7D)</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white/50 dark:bg-gray-900/50 divide-y divide-gray-200/30 dark:divide-gray-700/30">
+                {prices.map((crypto, index) => {
             // Eğer coin yükleniyorsa (veritabanında yok), loading göster
             if (crypto._isLoading) {
               return (
-                <div
-                  key={crypto.name}
-                  className="relative glass border-2 border-gray-200/50 dark:border-gray-700/50 rounded-3xl p-6 shadow-xl animate-pulse"
-                >
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-14 h-14 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 rounded-2xl animate-shimmer"></div>
+                <tr key={crypto.name} className="hover:bg-gray-100/50 dark:hover:bg-gray-800/70 transition-colors bg-white/30 dark:bg-gray-900/30">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <div className="h-4 w-8 bg-gray-200/50 dark:bg-gray-700/50 rounded animate-pulse"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-gray-200/50 dark:bg-gray-700/50 rounded-full animate-pulse"></div>
                       <div>
-                        <div className="h-6 w-24 bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 rounded-lg mb-2 animate-shimmer"></div>
-                        <div className="h-4 w-28 bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 rounded-lg animate-shimmer"></div>
+                        <div className="h-4 w-24 bg-gray-200/50 dark:bg-gray-700/50 rounded mb-1 animate-pulse"></div>
+                        <div className="h-3 w-16 bg-gray-200/50 dark:bg-gray-700/50 rounded animate-pulse"></div>
                       </div>
                     </div>
-                  </div>
-                  <div className="mb-6">
-                    <div className="h-10 w-36 bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 rounded-lg mb-3 animate-shimmer"></div>
-                    <div className="h-4 w-44 bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 rounded-lg animate-shimmer"></div>
-                  </div>
-                  <div className="h-32 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 rounded-2xl flex items-center justify-center border border-gray-200/50 dark:border-gray-600/50">
-                    <div className="text-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-3 border-primary-600 dark:border-primary-400 border-t-transparent mx-auto mb-3"></div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold">Fiyat yükleniyor...</p>
-                    </div>
-                  </div>
-                </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <div className="h-4 w-24 bg-gray-200/50 dark:bg-gray-700/50 rounded animate-pulse ml-auto"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <div className="h-6 w-20 bg-gray-200/50 dark:bg-gray-700/50 rounded animate-pulse ml-auto"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="h-12 w-32 bg-gray-200/50 dark:bg-gray-700/50 rounded mx-auto animate-pulse"></div>
+                  </td>
+                </tr>
               )
             }
             
@@ -1847,231 +1937,111 @@ const DashboardPage = () => {
             const priceDate = crypto.binancetime ? new Date(crypto.binancetime) : null
             const isPriceStale = priceDate ? (Date.now() - priceDate.getTime()) > 24 * 60 * 60 * 1000 : false // 24 saatten eski
 
-            // Her kart için farklı gradient renkleri
-            const cardColors = [
-              { bg: 'from-primary-500 to-primary-300', border: 'border-stone-200', icon: 'bg-stone-50' },
-              { bg: 'from-primary-600 to-primary-400', border: 'border-stone-300', icon: 'bg-stone-100' },
-              { bg: 'from-primary-500 to-amber-200', border: 'border-amber-200', icon: 'bg-amber-50' },
-              { bg: 'from-primary-700 to-primary-500', border: 'border-primary-200', icon: 'bg-primary-50' },
-              { bg: 'from-stone-600 to-primary-500', border: 'border-stone-300', icon: 'bg-stone-100' },
-              { bg: 'from-primary-500 to-stone-400', border: 'border-stone-200', icon: 'bg-stone-50' },
-            ]
-            const colorIndex = index % cardColors.length
-            const cardColor = cardColors[colorIndex]
-
             return (
-              <div
+              <tr
                 key={crypto.name}
-                className="relative group cursor-pointer animate-slide-up"
-                style={{ 
-                  animationDelay: `${index * 0.05}s`,
-                  transformStyle: 'preserve-3d',
-                  perspective: '1000px'
-                }}
                 onClick={() => navigate(`/crypto/${crypto.name}`)}
+                className="hover:bg-gray-100/70 dark:hover:bg-gray-800/70 transition-all duration-200 cursor-pointer group bg-white/40 dark:bg-gray-900/40 border-b border-gray-200/30 dark:border-gray-700/30"
               >
-                {/* Card Container with enhanced design and 3D depth */}
-                <div className={`relative glass border ${hasPrice && hasEnoughHistory ? cardColor.border : 'border-gray-200 dark:border-gray-700'} dark:border-gray-700 rounded-xl p-5 shadow-sm dark:shadow-gray-900/30 hover:shadow-md transition-all duration-200 hover:-translate-y-1 overflow-hidden group ${!hasPrice || !hasEnoughHistory ? 'opacity-90' : ''}`} style={{ transform: 'translateZ(20px)' }}>
-                  {/* Subtle hover effects - only if has data */}
-                  {hasPrice && hasEnoughHistory && (
-                    <>
-                      <div className={`absolute inset-0 bg-gradient-to-br ${cardColor.bg} opacity-0 group-hover:opacity-5 transition-opacity duration-300`}></div>
-                      <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-500 bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
-                    </>
-                  )}
-                  
-                  {/* Content */}
-                  <div className="relative z-10">
-                    {/* Header */}
-                    <div className="flex items-center justify-between mb-5">
-                      <div className="flex items-center space-x-3">
-                        <div className={`relative ${hasPrice && hasEnoughHistory ? cardColor.icon : 'bg-gray-100 dark:bg-gray-800'} rounded-lg p-2.5 shadow-sm transition-all duration-200 border border-gray-200 dark:border-gray-700`}>
-                          <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent rounded-lg"></div>
-                          <span className="relative text-xl">{getCryptoIcon(crypto.name)}</span>
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors duration-200">
-                            {getCryptoName(crypto.name)}
-                          </h3>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 font-normal">{crypto.name}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-1.5">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleShowCoinInfo(crypto.name)
-                          }}
-                          className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors duration-200 group/info"
-                          title="Coin Bilgileri"
-                        >
-                          <Info className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 group-hover/info:text-primary-600 dark:group-hover/info:text-primary-400 transition-colors" />
-                        </button>
-                        {hasEnoughHistory ? (
-                          <div className={`flex items-center space-x-1 px-1.5 py-0.5 rounded text-xs font-medium ${isPositive ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'}`}>
-                            <div className={`w-1 h-1 ${isPositive ? 'bg-green-500' : 'bg-red-500'} rounded-full`}></div>
-                            <span>
-                              {isPositive ? '↑' : '↓'}
-                            </span>
-                          </div>
-                        ) : !hasPrice ? (
-                          <div className="px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-                            Veri yok
-                          </div>
-                        ) : hasHistory ? (
-                          <div className="px-1.5 py-0.5 rounded text-xs font-medium bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400">
-                            Yetersiz
-                          </div>
-                        ) : null}
-                      </div>
+                {/* Sıra Numarası */}
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-600 dark:text-gray-300">
+                  {index + 1}
+                </td>
+                
+                {/* Coin Adı ve Sembolü */}
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center space-x-3">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/80 dark:to-primary-800/80 flex items-center justify-center text-lg font-bold text-primary-700 dark:text-primary-300 border-2 border-primary-200/50 dark:border-primary-700/50 shadow-sm group-hover:shadow-md transition-shadow">
+                      {getCryptoIcon(crypto.name)}
                     </div>
-
-                    {/* Price */}
-                    <div className="mb-6">
-                      {hasPrice ? (
-                        <>
-                          <div className="flex items-baseline gap-2 mb-2">
-                            <p className="text-3xl font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
-                              ${formatPrice(crypto.price)}
-                            </p>
-                            {isPriceStale && (
-                              <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded">
-                                Eski veri
-                              </span>
-                            )}
-                          </div>
-                          {hasEnoughHistory ? (
-                            <div className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-medium mb-2 ${isPositive ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'}`}>
-                              {isPositive ? (
-                                <TrendingUp className="w-3.5 h-3.5" />
-                              ) : (
-                                <TrendingDown className="w-3.5 h-3.5" />
-                              )}
-                              <span>
-                                {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
-                              </span>
-                            </div>
-                          ) : hasHistory && (
-                            <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-medium mb-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
-                              <span>Yetersiz veri</span>
-                            </div>
-                          )}
-                          {priceDate && (
-                            <p className="text-xs text-gray-400 dark:text-gray-500 font-normal">
-                              {priceDate.toLocaleString('tr-TR', { 
-                                day: '2-digit', 
-                                month: '2-digit', 
-                                year: 'numeric',
-                                hour: '2-digit', 
-                                minute: '2-digit' 
-                              })}
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <p className="text-2xl font-medium text-gray-400 dark:text-gray-500">
-                              Fiyat yok
-                            </p>
-                            <span className="text-xs font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
-                              Veri bekleniyor
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-400 dark:text-gray-500">
-                            Bu coin için henüz fiyat verisi bulunmuyor
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Mini Chart */}
-                    {hasEnoughHistory ? (
-                      <div className="mb-6 h-32 bg-gradient-to-br from-gray-50/80 to-gray-100/80 dark:from-gray-700/80 dark:to-gray-800/80 rounded-xl p-3 border border-gray-200/50 dark:border-gray-600/50 shadow-inner backdrop-blur-sm">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={history} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-                            <defs>
-                              <linearGradient id={`gradient-${crypto.name}`} x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor={isPositive ? '#10b981' : '#ef4444'} stopOpacity={0.4}/>
-                                <stop offset="95%" stopColor={isPositive ? '#10b981' : '#ef4444'} stopOpacity={0}/>
-                              </linearGradient>
-                            </defs>
-                            <YAxis hide domain={yAxisDomain} />
-                            <XAxis hide />
-                            <Area
-                              type="monotone"
-                              dataKey="price"
-                              stroke="none"
-                              fill={`url(#gradient-${crypto.name})`}
-                              isAnimationActive={true}
-                              animationDuration={1500}
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey="price"
-                              stroke={isPositive ? '#10b981' : '#ef4444'}
-                              strokeWidth={2}
-                              dot={false}
-                              isAnimationActive={true}
-                              animationDuration={1500}
-                            />
-                            <Tooltip
-                              contentStyle={{
-                                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                                backdropFilter: 'blur(10px)',
-                                border: `1px solid ${isPositive ? '#10b981' : '#ef4444'}`,
-                                borderRadius: '8px',
-                                padding: '8px 12px',
-                                fontSize: '12px',
-                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                                fontWeight: '500',
-                              }}
-                              formatter={(value) => [`$${formatPrice(value)}`, 'Fiyat']}
-                              labelStyle={{ color: isPositive ? '#10b981' : '#ef4444', fontWeight: '600' }}
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                        {getCryptoName(crypto.name)}
                       </div>
-                    ) : hasHistory ? (
-                      <div className="mb-6 h-32 bg-gray-50 dark:bg-gray-800/50 rounded-xl flex items-center justify-center border border-gray-200 dark:border-gray-700 border-dashed">
-                        <div className="text-center px-4">
-                          <div className="w-12 h-12 mx-auto mb-2 text-gray-300 dark:text-gray-600">
-                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                            </svg>
-                          </div>
-                          <p className="text-xs text-gray-400 dark:text-gray-500 font-medium">Yetersiz grafik verisi</p>
-                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Daha fazla veri toplandıkça grafik görünecek</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="mb-6 h-32 bg-gray-50 dark:bg-gray-800/50 rounded-xl flex items-center justify-center border border-gray-200 dark:border-gray-700 border-dashed">
-                        <div className="text-center px-4">
-                          <div className="w-10 h-10 mx-auto mb-2 text-gray-300 dark:text-gray-600">
-                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-                            </svg>
-                          </div>
-                          <p className="text-xs text-gray-400 dark:text-gray-500 font-medium">Grafik verisi yok</p>
-                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Fiyat güncellemesi sonrası grafik görünecek</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Footer */}
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700 group-hover:border-gray-300 dark:group-hover:border-gray-600 transition-colors duration-200">
-                      <span className="text-xs font-medium text-gray-600 dark:text-gray-400 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors duration-200">
-                        Detayları Gör
-                      </span>
-                      <div className={`w-8 h-8 ${cardColor.icon} rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 group-hover:bg-primary-50 dark:group-hover:bg-primary-900/20 transition-all duration-200 border border-gray-200 dark:border-gray-700`}>
-                        <ArrowRight className={`w-4 h-4 text-gray-600 dark:text-gray-400 group-hover:text-primary-600 dark:group-hover:text-primary-400 group-hover:translate-x-0.5 transition-all duration-200`} />
-                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">{crypto.name}</div>
                     </div>
                   </div>
-                </div>
-              </div>
+                </td>
+                
+                {/* Fiyat */}
+                <td className="px-6 py-4 whitespace-nowrap text-right">
+                  {hasPrice ? (
+                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      ${formatPrice(crypto.price)}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-400 dark:text-gray-500">N/A</div>
+                  )}
+                </td>
+                
+                {/* 24 Saatlik Değişim */}
+                <td className="px-6 py-4 whitespace-nowrap text-right">
+                  {hasEnoughHistory ? (
+                    <div className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-sm font-semibold shadow-sm ${
+                      isPositive 
+                        ? 'bg-green-50/80 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200/50 dark:border-green-800/50' 
+                        : 'bg-red-50/80 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200/50 dark:border-red-800/50'
+                    }`}>
+                      {isPositive ? (
+                        <TrendingUp className="w-4 h-4" />
+                      ) : (
+                        <TrendingDown className="w-4 h-4" />
+                      )}
+                      <span>{isPositive ? '+' : ''}{priceChange.toFixed(2)}%</span>
+                    </div>
+                  ) : hasPrice ? (
+                    <div className="text-sm text-gray-400 dark:text-gray-500">-</div>
+                  ) : (
+                    <div className="text-sm text-gray-400 dark:text-gray-500">N/A</div>
+                  )}
+                </td>
+                
+                {/* 7 Günlük Grafik */}
+                <td className="px-6 py-4 whitespace-nowrap">
+                  {hasEnoughHistory ? (
+                    <div className="h-12 w-40 mx-auto bg-gray-50/50 dark:bg-gray-800/30 rounded-lg p-1 border border-gray-200/30 dark:border-gray-700/30">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={history} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
+                          <defs>
+                            <linearGradient id={`gradient-table-${crypto.name}`} x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor={isPositive ? '#10b981' : '#ef4444'} stopOpacity={0.4}/>
+                              <stop offset="95%" stopColor={isPositive ? '#10b981' : '#ef4444'} stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <YAxis hide domain={yAxisDomain} />
+                          <XAxis hide />
+                          <Area
+                            type="monotone"
+                            dataKey="price"
+                            stroke="none"
+                            fill={`url(#gradient-table-${crypto.name})`}
+                            isAnimationActive={true}
+                            animationDuration={1000}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="price"
+                            stroke={isPositive ? '#10b981' : '#ef4444'}
+                            strokeWidth={2}
+                            dot={false}
+                            isAnimationActive={true}
+                            animationDuration={1000}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <div className="h-12 w-40 mx-auto flex items-center justify-center bg-gray-50/30 dark:bg-gray-800/20 rounded-lg border border-gray-200/20 dark:border-gray-700/20">
+                      <div className="text-xs text-gray-400 dark:text-gray-500">-</div>
+                    </div>
+                  )}
+                </td>
+              </tr>
             )
           })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -2253,46 +2223,59 @@ const DashboardPage = () => {
         </div>
       )}
 
-      {/* Coin Ekleme Modal */}
+      {/* Coin Ekleme Modal - Modern Design */}
       {showAddCoinModal && (
         <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="glass border-2 border-white/20 rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden animate-scale-in">
-            {/* Modal Header */}
-            <div className="bg-gradient-to-r from-primary-600 via-purple-600 to-pink-600 p-8 text-white">
-              <div className="flex items-center justify-between">
-                <h2 className="text-3xl font-extrabold drop-shadow-lg">Coin Ekle</h2>
-                <button
-                  onClick={() => {
-                    setShowAddCoinModal(false)
-                    setCoinSearchQuery('')
-                    setCoinSearchResults([])
-                  }}
-                  className="hover:bg-white/20 rounded-xl p-2.5 transition-all duration-300 hover:scale-110 hover:rotate-90"
-                >
-                  <X className="w-6 h-6" />
-                </button>
+          <div className="glass border-2 border-white/20 dark:border-gray-700/30 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-scale-in bg-white/95 dark:bg-gray-900/95">
+            {/* Modal Header - Modern Design */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-primary-700 via-primary-600 to-primary-500 dark:from-[#071428] dark:via-[#07283b] dark:to-[#0b3650] p-6 gradient-animated">
+              <div className="absolute inset-0 bg-black/10 dark:bg-black/20"></div>
+              <div className="absolute inset-0 mesh-gradient opacity-30"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/30 shadow-lg">
+                      <Plus className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-extrabold text-white drop-shadow-lg">Coin Ekle</h2>
+                      <p className="text-white/80 text-sm mt-0.5">Takip etmek istediğiniz coin'i arayın</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowAddCoinModal(false)
+                      setCoinSearchQuery('')
+                      setCoinSearchResults([])
+                    }}
+                    className="hover:bg-white/20 rounded-xl p-2.5 transition-all duration-300 hover:scale-110 hover:rotate-90"
+                  >
+                    <X className="w-6 h-6 text-white" />
+                  </button>
+                </div>
               </div>
-              <p className="text-white/90 mt-3 font-semibold text-lg">Takip etmek istediğiniz coin'i arayın ve ekleyin</p>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-6">
-              {/* Arama Input */}
-              <div className="relative mb-4">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  value={coinSearchQuery}
-                  onChange={(e) => setCoinSearchQuery(e.target.value)}
-                  placeholder="Coin adı veya symbol (örn: Bitcoin, BTC, ETH)"
-                  className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-100 rounded-xl focus:border-primary-500 dark:focus:border-primary-400 focus:outline-none transition-colors"
-                  autoFocus
-                />
-                {isSearching && (
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-600"></div>
-                  </div>
-                )}
+            {/* Modal Body - Modern Design */}
+            <div className="p-6 bg-white/50 dark:bg-gray-900/50">
+              {/* Arama Input - Modern Design */}
+              <div className="relative mb-6">
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-5 h-5 z-10" />
+                  <input
+                    type="text"
+                    value={coinSearchQuery}
+                    onChange={(e) => setCoinSearchQuery(e.target.value)}
+                    placeholder="Coin adı veya symbol (örn: Bitcoin, BTC, ETH)"
+                    className="w-full pl-12 pr-12 py-3.5 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl focus:border-primary-500 dark:focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:focus:ring-primary-400/20 transition-all text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 shadow-sm hover:shadow-md"
+                    autoFocus
+                  />
+                  {isSearching && (
+                    <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary-500 border-t-transparent"></div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Arama Sonuçları */}
@@ -2305,21 +2288,20 @@ const DashboardPage = () => {
                 />
               )}
 
-              {/* Manuel Giriş */}
-              <div className="border-t pt-4">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+              {/* Manuel Giriş - Modern Design */}
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-5 mt-5">
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
                   Veya manuel olarak symbol girin:
                 </label>
-                <div className="flex space-x-2">
+                <div className="flex space-x-3">
                   <input
                     type="text"
                     value={coinSearchQuery}
                     onChange={(e) => setCoinSearchQuery(e.target.value)}
                     placeholder="BTC, ETH, SOL..."
-                    className="flex-1 px-4 py-2 border-2 border-gray-200 rounded-xl focus:border-primary-500 focus:outline-none"
+                    className="flex-1 px-4 py-2.5 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl focus:border-primary-500 dark:focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:focus:ring-primary-400/20 transition-all text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 shadow-sm"
                     onKeyPress={(e) => {
                       if (e.key === 'Enter' && coinSearchQuery.trim()) {
-                        // Manuel giriş için symbol string gönder
                         handleAddCoin(coinSearchQuery.trim())
                       }
                     }}
@@ -2331,23 +2313,24 @@ const DashboardPage = () => {
                       }
                     }}
                     disabled={!coinSearchQuery.trim() || isSearching}
-                    className="px-6 py-2 bg-gradient-to-r from-primary-600 to-purple-600 text-white rounded-xl hover:from-primary-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+                    className="px-6 py-2.5 bg-gradient-to-r from-primary-600 to-primary-700 dark:from-primary-600 dark:to-primary-700 text-white rounded-xl hover:from-primary-700 hover:to-primary-800 dark:hover:from-primary-700 dark:hover:to-primary-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-semibold shadow-lg hover:shadow-xl"
                   >
                     Ekle
                   </button>
                 </div>
               </div>
 
-              {/* Varsayılan Binance Coinleri */}
-              <div className="mt-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border-2 border-green-200">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">
-                  Varsayılan Binance Coinleri ({DEFAULT_BINANCE_COINS.length}):
+              {/* Varsayılan Binance Coinleri - Modern Design */}
+              <div className="mt-6 p-5 bg-gradient-to-br from-green-50/80 to-emerald-50/80 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl border-2 border-green-200/50 dark:border-green-800/50 backdrop-blur-sm shadow-md">
+                <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-3 flex items-center space-x-2">
+                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  <span>Varsayılan Binance Coinleri ({DEFAULT_BINANCE_COINS.length})</span>
                 </h3>
                 <div className="flex flex-wrap gap-2">
                   {DEFAULT_BINANCE_COINS.map((coin) => (
                     <span
                       key={coin}
-                      className="px-3 py-1 bg-white text-gray-700 rounded-full text-xs font-semibold border border-green-300 shadow-sm"
+                      className="px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-semibold border border-green-300 dark:border-green-700 shadow-sm hover:shadow-md transition-shadow"
                     >
                       {coin}
                     </span>
@@ -2355,24 +2338,25 @@ const DashboardPage = () => {
                 </div>
               </div>
 
-              {/* Özel Eklenen Coin'ler */}
+              {/* Özel Eklenen Coin'ler - Modern Design */}
               {customCoins.length > 0 && (
-                <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">
-                    Özel Eklenen Coin'ler ({customCoins.length}):
+                <div className="mt-4 p-5 bg-gradient-to-br from-primary-50/80 to-blue-50/80 dark:from-primary-900/20 dark:to-blue-900/20 rounded-xl border-2 border-primary-200/50 dark:border-primary-800/50 backdrop-blur-sm shadow-md">
+                  <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-3 flex items-center space-x-2">
+                    <span className="w-2 h-2 bg-primary-500 rounded-full"></span>
+                    <span>Özel Eklenen Coin'ler ({customCoins.length})</span>
                   </h3>
                   <div className="flex flex-wrap gap-2">
                     {customCoins.map((coin) => (
                       <div
                         key={coin}
-                        className="flex items-center space-x-2 bg-primary-100 text-primary-700 px-3 py-1.5 rounded-lg"
+                        className="flex items-center space-x-2 bg-white dark:bg-gray-800 text-primary-700 dark:text-primary-400 px-3 py-1.5 rounded-lg border border-primary-300 dark:border-primary-700 shadow-sm hover:shadow-md transition-all group"
                       >
-                        <span className="font-semibold">{coin}</span>
+                        <span className="font-semibold text-sm">{coin}</span>
                         <button
                           onClick={() => handleRemoveCoin(coin)}
-                          className="hover:bg-primary-200 rounded p-0.5 transition-colors"
+                          className="hover:bg-primary-100 dark:hover:bg-primary-900/50 rounded p-0.5 transition-colors opacity-70 group-hover:opacity-100"
                         >
-                          <X className="w-4 h-4" />
+                          <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     ))}
