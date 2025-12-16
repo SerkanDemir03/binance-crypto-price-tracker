@@ -2,6 +2,8 @@ require('dotenv').config();
 const { httpServer, io } = require('./app');
 const schedulerService = require('./services/schedulerService');
 const PriceService = require('./services/priceService');
+const FiatExchangeRateService = require('./services/fiatExchangeRateService');
+const cryptoController = require('./controllers/crypto.controller');
 const { UPDATE_INTERVAL, CRYPTO_SYMBOLS } = require('./config/constants');
 
 const PORT = process.env.PORT || 5000;
@@ -41,6 +43,38 @@ httpServer.listen(PORT, async () => {
         schedulerService.fetchAndSavePrices().catch(err => {
           console.error('⚠️ Initial price fetch failed, but server continues:', err.message);
         });
+
+        // Initialize Fiat Exchange Rate Service
+        const fiatExchangeRateService = new FiatExchangeRateService(io);
+        cryptoController.setFiatExchangeRateService(fiatExchangeRateService);
+        
+        // Initial fiat rates update - await ile yap (veritabanına veri yüklenmesi için)
+        // Rate limit koruması için 5 saniye bekle
+        setTimeout(async () => {
+          try {
+            console.log('🔄 Initial fiat exchange rates update başlatılıyor...');
+            await fiatExchangeRateService.updateAllExchangeRates();
+            console.log('✅ Initial fiat exchange rates update tamamlandı');
+          } catch (err) {
+            console.error('⚠️ Initial fiat rates update failed, but server continues:', err.message);
+            // Hata olsa bile servis çalışmaya devam eder, getExchangeRate fallback kullanır
+          }
+        }, 5000); // 5 saniye bekle (rate limit koruması)
+
+        // Schedule fiat rates update every hour (fiat kurları çok sık değişmez)
+        const cron = require('node-cron');
+        cron.schedule('0 * * * *', async () => {
+          try {
+            await fiatExchangeRateService.updateAllExchangeRates();
+          } catch (error) {
+            console.error('⚠️ Scheduled fiat rates update failed:', error.message);
+          }
+        }, {
+          scheduled: true,
+          timezone: 'Europe/Istanbul'
+        });
+        
+        console.log(`✅ Fiat exchange rate service initialized (updates every hour)`);
       } catch (error) {
         console.error('⚠️ Error initializing services (server continues):', error.message);
         console.error('Full error:', error);

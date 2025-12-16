@@ -39,30 +39,37 @@ class NewsService {
         timeout: 10000
       });
 
-      if (response.status === 200 && response.data.Data) {
+      if (response.status === 200 && response.data && response.data.Data && Array.isArray(response.data.Data)) {
         const news = response.data.Data
+          .filter(item => item && item.title && item.id) // Geçersiz haberleri filtrele
           .slice(0, limit)
           .map(item => ({
-            id: item.id,
-            title: item.title,
-            body: item.body,
-            url: item.url,
-            source: item.source,
-            imageUrl: item.imageurl,
-            publishedAt: new Date(item.published_on * 1000).toISOString(),
-            categories: item.categories?.split('|') || [],
-            tags: item.tags?.split('|') || []
+            id: item.id || `cryptocompare-${Date.now()}-${Math.random()}`,
+            title: item.title || 'Başlıksız Haber',
+            body: item.body || '',
+            url: item.url || '',
+            source: item.source || 'CryptoCompare',
+            imageUrl: item.imageurl || null,
+            publishedAt: item.published_on 
+              ? new Date(item.published_on * 1000).toISOString()
+              : new Date().toISOString(),
+            categories: item.categories ? item.categories.split('|').filter(Boolean) : [],
+            tags: item.tags ? item.tags.split('|').filter(Boolean) : []
           }));
 
         // Cache for 10 minutes
-        cacheService.set(cacheKey, news, 10 * 60 * 1000);
-        logger.info(`✅ ${news.length} haber CryptoCompare'dan alındı`);
+        if (news.length > 0) {
+          cacheService.set(cacheKey, news, 10 * 60 * 1000);
+          logger.info(`✅ ${news.length} haber CryptoCompare'dan alındı`);
+        }
         return news;
       }
 
+      logger.warn('⚠️ CryptoCompare API yanıtı geçersiz veya boş');
       return [];
     } catch (error) {
-      logger.error('Error fetching CryptoCompare news:', error);
+      logger.error('Error fetching CryptoCompare news:', error.message || error);
+      // Hata durumunda boş array döndür (uygulama çökmesin)
       return [];
     }
   }
@@ -83,50 +90,78 @@ class NewsService {
         timeout: 10000
       });
 
-      if (response.status === 200 && response.data.data) {
+      if (response.status === 200 && response.data && response.data.data && Array.isArray(response.data.data)) {
         const news = response.data.data
+          .filter(item => item && item.title && item.id) // Geçersiz haberleri filtrele
           .slice(0, limit)
           .map(item => ({
-            id: item.id,
-            title: item.title,
-            description: item.description,
-            url: item.url,
-            source: item.news_site,
-            imageUrl: item.thumb_2x || item.thumb,
-            publishedAt: new Date(item.published_at).toISOString(),
-            tags: item.tags || []
+            id: item.id || `coingecko-${Date.now()}-${Math.random()}`,
+            title: item.title || 'Başlıksız Haber',
+            description: item.description || '',
+            url: item.url || '',
+            source: item.news_site || 'CoinGecko',
+            imageUrl: item.thumb_2x || item.thumb || null,
+            publishedAt: item.published_at 
+              ? new Date(item.published_at).toISOString()
+              : new Date().toISOString(),
+            tags: Array.isArray(item.tags) ? item.tags.filter(Boolean) : []
           }));
 
         // Cache for 10 minutes
-        cacheService.set(cacheKey, news, 10 * 60 * 1000);
-        logger.info(`✅ ${news.length} haber CoinGecko'dan alındı`);
+        if (news.length > 0) {
+          cacheService.set(cacheKey, news, 10 * 60 * 1000);
+          logger.info(`✅ ${news.length} haber CoinGecko'dan alındı`);
+        }
         return news;
       }
 
+      logger.warn('⚠️ CoinGecko API yanıtı geçersiz veya boş');
       return [];
     } catch (error) {
-      logger.error('Error fetching CoinGecko news:', error);
+      logger.error('Error fetching CoinGecko news:', error.message || error);
+      // Hata durumunda boş array döndür (uygulama çökmesin)
       return [];
     }
   }
 
   /**
    * Tüm haber kaynaklarından haberleri birleştirir
+   * Promise.allSettled kullanarak bir API başarısız olsa bile diğeri çalışır
    */
   async getAllNews(limit = 30) {
     try {
-      const [cryptoCompareNews, coinGeckoNews] = await Promise.all([
+      // Promise.allSettled kullan - bir API başarısız olsa bile diğeri çalışsın
+      const results = await Promise.allSettled([
         this.getCryptoCompareNews(Math.ceil(limit / 2)),
         this.getCoinGeckoNews(Math.ceil(limit / 2))
       ]);
 
+      // Başarılı sonuçları topla
+      const allNews = [];
+      
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled' && Array.isArray(result.value)) {
+          allNews.push(...result.value);
+        } else {
+          const sourceName = index === 0 ? 'CryptoCompare' : 'CoinGecko';
+          logger.warn(`⚠️ ${sourceName} haberleri alınamadı:`, result.reason?.message || 'Bilinmeyen hata');
+        }
+      });
+
       // Combine and sort by date
-      const allNews = [...cryptoCompareNews, ...coinGeckoNews]
-        .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
+      const sortedNews = allNews
+        .filter(news => news && news.title) // Geçersiz haberleri filtrele
+        .sort((a, b) => {
+          try {
+            return new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0);
+          } catch {
+            return 0;
+          }
+        })
         .slice(0, limit);
 
-      logger.info(`✅ Toplam ${allNews.length} haber birleştirildi`);
-      return allNews;
+      logger.info(`✅ Toplam ${sortedNews.length} haber birleştirildi`);
+      return sortedNews;
     } catch (error) {
       logger.error('Error fetching all news:', error);
       return [];

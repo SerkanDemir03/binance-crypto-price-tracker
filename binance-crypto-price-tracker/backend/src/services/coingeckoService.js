@@ -6,6 +6,7 @@ const rateLimitService = require('./rateLimitService');
 
 // CoinGecko API URL
 const COINGECKO_API_URL = 'https://api.coingecko.com/api/v3/simple/price';
+const COINGECKO_EXCHANGE_RATES_URL = 'https://api.coingecko.com/api/v3/exchange_rates';
 
 // Binance symbol'lerini CoinGecko ID'lerine map et
 const SYMBOL_TO_COINGECKO_ID = {
@@ -491,6 +492,66 @@ class CoinGeckoService {
         throw new Error('CoinGecko API rate limit aşıldı. Lütfen birkaç saniye sonra tekrar deneyin.');
       }
       logger.error('❌ Error fetching prices by symbols:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fiat para birimlerinin USD karşılığını getirir
+   * @param {string} currency - Para birimi kodu (EUR, TRY, SAR, vb.)
+   * @returns {Promise<number>} USD karşılığı
+   */
+  async getFiatExchangeRate(currency) {
+    try {
+      // Check cache first
+      const cacheKey = cacheService.generateKey('coingecko', `fiat-rate-${currency.toLowerCase()}`);
+      const cached = cacheService.get(cacheKey);
+      if (cached) {
+        logger.debug(`✅ Fiat exchange rate cache'den alındı: ${currency}`);
+        return cached;
+      }
+
+      // Check rate limit
+      if (!rateLimitService.canMakeRequest('coingecko', 1200)) {
+        await rateLimitService.waitForBackoff('coingecko');
+      }
+
+      // CoinGecko exchange rates API'den tüm kurları çek
+      const response = await axios.get(COINGECKO_EXCHANGE_RATES_URL, {
+        timeout: 10000,
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+
+      if (response.status === 200 && response.data && response.data.rates) {
+        const currencyUpper = currency.toUpperCase();
+        const rateData = response.data.rates[currencyUpper.toLowerCase()];
+        
+        if (!rateData) {
+          throw new Error(`${currency} için kur bulunamadı`);
+        }
+
+        // CoinGecko rates API'si USD bazlı değerler döner
+        // value: 1 USD = X currency (örneğin EUR için ~0.92)
+        // Ama bizim ihtiyacımız 1 currency = X USD
+        // Bu yüzden 1 / value yapmalıyız
+        const rate = rateData.value ? (1 / rateData.value) : null;
+        
+        if (!rate || rate <= 0) {
+          throw new Error(`${currency} için geçersiz kur değeri`);
+        }
+
+        // Cache'e kaydet (5 dakika)
+        cacheService.set(cacheKey, rate, 5 * 60 * 1000);
+        
+        logger.info(`✅ ${currency} exchange rate alındı: ${rate}`);
+        return rate;
+      }
+
+      throw new Error('Exchange rates API yanıtı geçersiz');
+    } catch (error) {
+      logger.error(`❌ Error getting fiat exchange rate for ${currency}:`, error);
       throw error;
     }
   }

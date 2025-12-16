@@ -63,13 +63,13 @@ const DatabaseManagementPage = () => {
 
   const getDataTypeColor = (type) => {
     const colors = {
-      'varchar': 'bg-blue-100 text-blue-700',
-      'numeric': 'bg-green-100 text-green-700',
-      'timestamp': 'bg-purple-100 text-purple-700',
-      'serial': 'bg-orange-100 text-orange-700',
-      'integer': 'bg-pink-100 text-pink-700',
+      'varchar': 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300',
+      'numeric': 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300',
+      'timestamp': 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300',
+      'serial': 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300',
+      'integer': 'bg-pink-100 dark:bg-pink-900/40 text-pink-700 dark:text-pink-300',
     }
-    return colors[type.toLowerCase()] || 'bg-gray-100 text-gray-700'
+    return colors[type.toLowerCase()] || 'bg-gray-100 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300'
   }
 
   if (isLoading) {
@@ -149,17 +149,17 @@ const DatabaseManagementPage = () => {
         {/* Bağlantı Bilgileri */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl dark:shadow-gray-900/50 p-6 border-2 border-gray-100 dark:border-gray-700">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Server className="w-6 h-6 text-primary-600" />
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+              <Server className="w-6 h-6 text-primary-600 dark:text-primary-400" />
               Bağlantı Durumu
             </h2>
             {connection.connected ? (
-              <div className="flex items-center space-x-2 text-green-600">
+              <div className="flex items-center space-x-2 text-green-600 dark:text-green-400">
                 <CheckCircle className="w-6 h-6" />
                 <span className="font-semibold">Aktif</span>
               </div>
             ) : (
-              <div className="flex items-center space-x-2 text-red-600">
+              <div className="flex items-center space-x-2 text-red-600 dark:text-red-400">
                 <XCircle className="w-6 h-6" />
                 <span className="font-semibold">Bağlantı Yok</span>
               </div>
@@ -167,21 +167,21 @@ const DatabaseManagementPage = () => {
           </div>
           
           <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <span className="text-gray-600 dark:text-gray-300 font-medium">PostgreSQL Versiyonu:</span>
-              <span className="text-gray-900 dark:text-gray-100 font-semibold">
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/80 rounded-lg border border-gray-200 dark:border-gray-600">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">PostgreSQL Versiyonu:</span>
+              <span className="text-base font-bold text-gray-900 dark:text-gray-100">
                 {connection.version ? connection.version.split(' ')[0] + ' ' + connection.version.split(' ')[1] : 'N/A'}
               </span>
             </div>
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <span className="text-gray-600 dark:text-gray-300 font-medium">Son Kontrol:</span>
-              <span className="text-gray-900 dark:text-gray-100 font-semibold">
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/80 rounded-lg border border-gray-200 dark:border-gray-600">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Son Kontrol:</span>
+              <span className="text-base font-bold text-gray-900 dark:text-gray-100">
                 {formatDate(connection.timestamp)}
               </span>
             </div>
             {connection.error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-700 text-sm font-medium">Hata: {connection.error}</p>
+              <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
+                <p className="text-red-700 dark:text-red-300 text-sm font-semibold">Hata: {connection.error}</p>
               </div>
             )}
           </div>
@@ -190,17 +190,17 @@ const DatabaseManagementPage = () => {
         {/* Tablo Bilgileri */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl dark:shadow-gray-900/50 p-6 border-2 border-gray-100 dark:border-gray-700">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Table className="w-6 h-6 text-primary-600" />
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+              <Table className="w-6 h-6 text-primary-600 dark:text-primary-400" />
               Tablo Bilgileri
             </h2>
             {table.exists ? (
-              <div className="flex items-center space-x-2 text-green-600">
+              <div className="flex items-center space-x-2 text-green-600 dark:text-green-400">
                 <CheckCircle className="w-5 h-5" />
                 <span className="text-sm font-semibold">Mevcut</span>
               </div>
             ) : (
-              <div className="flex items-center space-x-2 text-yellow-600">
+              <div className="flex items-center space-x-2 text-yellow-600 dark:text-yellow-400">
                 <Info className="w-5 h-5" />
                 <span className="text-sm font-semibold">Oluşturulacak</span>
               </div>
@@ -208,13 +208,13 @@ const DatabaseManagementPage = () => {
           </div>
           
           <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <span className="text-gray-600 dark:text-gray-300 font-medium">Tablo Adı:</span>
-              <span className="text-gray-900 font-semibold font-mono">{table.name || 'N/A'}</span>
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/80 rounded-lg border border-gray-200 dark:border-gray-600">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Tablo Adı:</span>
+              <span className="text-base font-bold text-gray-900 dark:text-gray-100 font-mono">{table.name || 'N/A'}</span>
             </div>
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <span className="text-gray-600 dark:text-gray-300 font-medium">Takip Edilen Coin:</span>
-              <span className="text-gray-900 dark:text-gray-100 font-semibold">{details.coinCount || 0} coin</span>
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/80 rounded-lg border border-gray-200 dark:border-gray-600">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Takip Edilen Coin:</span>
+              <span className="text-base font-bold text-gray-900 dark:text-gray-100">{details.coinCount || 0} coin</span>
             </div>
           </div>
         </div>
@@ -224,44 +224,46 @@ const DatabaseManagementPage = () => {
       {table.exists && table.structure && table.structure.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl dark:shadow-gray-900/50 p-6 border-2 border-gray-100 dark:border-gray-700">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-6">
-            <Table className="w-6 h-6 text-primary-600" />
+            <Table className="w-6 h-6 text-primary-600 dark:text-primary-400" />
             Tablo Yapısı
           </h2>
           
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-gradient-to-r from-primary-50 to-purple-50">
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Kolon Adı</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Veri Tipi</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Maksimum Uzunluk</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Null Olabilir</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Varsayılan Değer</th>
+                <tr className="bg-gradient-to-r from-primary-600 via-primary-500 to-primary-600 dark:from-[#071428] dark:via-[#07283b] dark:to-[#0b3650]">
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Kolon Adı</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Veri Tipi</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Maksimum Uzunluk</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Null Olabilir</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Varsayılan Değer</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                 {table.structure.map((column, index) => (
-                  <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                    <td className="px-4 py-3">
-                      <span className="font-mono font-semibold text-gray-900 dark:text-gray-100">{column.name}</span>
+                  <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors bg-white dark:bg-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="font-mono font-bold text-base text-gray-900 dark:text-gray-100">{column.name}</span>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getDataTypeColor(column.type)}`}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${getDataTypeColor(column.type)} dark:border dark:border-opacity-30`}>
                         {column.type.toUpperCase()}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
-                      {column.maxLength ? `${column.maxLength} karakter` : '-'}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        {column.maxLength ? `${column.maxLength} karakter` : '-'}
+                      </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       {column.nullable ? (
-                        <span className="text-yellow-600 font-semibold">Evet</span>
+                        <span className="text-sm font-bold text-green-600 dark:text-green-400">Evet</span>
                       ) : (
-                        <span className="text-red-600 font-semibold">Hayır</span>
+                        <span className="text-sm font-bold text-red-600 dark:text-red-400">Hayır</span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-sm text-gray-600">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="font-mono text-sm font-semibold text-gray-700 dark:text-gray-300">
                         {column.defaultValue || '-'}
                       </span>
                     </td>
@@ -320,37 +322,37 @@ const DatabaseManagementPage = () => {
       {statistics && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl dark:shadow-gray-900/50 p-6 border-2 border-gray-100 dark:border-gray-700">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-6">
-            <BarChart3 className="w-6 h-6 text-primary-600" />
+            <BarChart3 className="w-6 h-6 text-primary-600 dark:text-primary-400" />
             Fiyat İstatistikleri
           </h2>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border-2 border-green-200">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-600 dark:text-gray-300 font-medium">Ortalama Fiyat</span>
-                <TrendingUp className="w-5 h-5 text-green-600" />
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 rounded-xl p-6 border-2 border-green-200 dark:border-green-700 shadow-lg">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Ortalama Fiyat</span>
+                <TrendingUp className="w-6 h-6 text-green-600 dark:text-green-400" />
               </div>
-              <div className="text-3xl font-bold text-green-700">
+              <div className="text-4xl font-extrabold text-green-700 dark:text-green-300">
                 ${formatNumber(statistics.averagePrice)}
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-red-50 to-rose-50 rounded-xl p-6 border-2 border-red-200">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-600 dark:text-gray-300 font-medium">Minimum Fiyat</span>
-                <TrendingDown className="w-5 h-5 text-red-600" />
+            <div className="bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/30 dark:to-rose-900/30 rounded-xl p-6 border-2 border-red-200 dark:border-red-700 shadow-lg">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Minimum Fiyat</span>
+                <TrendingDown className="w-6 h-6 text-red-600 dark:text-red-400" />
               </div>
-              <div className="text-3xl font-bold text-red-700">
+              <div className="text-4xl font-extrabold text-red-700 dark:text-red-300">
                 ${formatNumber(statistics.minPrice)}
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-6 border-2 border-blue-200">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-600 dark:text-gray-300 font-medium">Maksimum Fiyat</span>
-                <TrendingUp className="w-5 h-5 text-blue-600" />
+            <div className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 rounded-xl p-6 border-2 border-blue-200 dark:border-blue-700 shadow-lg">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Maksimum Fiyat</span>
+                <TrendingUp className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
-              <div className="text-3xl font-bold text-blue-700">
+              <div className="text-4xl font-extrabold text-blue-700 dark:text-blue-300">
                 ${formatNumber(statistics.maxPrice)}
               </div>
             </div>
@@ -362,48 +364,58 @@ const DatabaseManagementPage = () => {
       {coinStatistics.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl dark:shadow-gray-900/50 p-6 border-2 border-gray-100 dark:border-gray-700">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-6">
-            <BarChart3 className="w-6 h-6 text-primary-600" />
+            <BarChart3 className="w-6 h-6 text-primary-600 dark:text-primary-400" />
             Coin Bazında İstatistikler
           </h2>
           
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-gradient-to-r from-primary-50 to-purple-50">
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Coin</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Kayıt Sayısı</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Min Fiyat</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Max Fiyat</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Ortalama Fiyat</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">İlk Kayıt</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">Son Kayıt</th>
+                <tr className="bg-gradient-to-r from-primary-600 via-primary-500 to-primary-600 dark:from-[#071428] dark:via-[#07283b] dark:to-[#0b3650]">
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Coin</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Kayıt Sayısı</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Min Fiyat</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Max Fiyat</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Ortalama Fiyat</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">İlk Kayıt</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Son Kayıt</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                 {coinStatistics.map((coin, index) => (
-                  <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                    <td className="px-4 py-3">
-                      <span className="font-mono font-semibold text-gray-900">{coin.symbol}</span>
+                  <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors bg-white dark:bg-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="font-mono font-bold text-base text-gray-900 dark:text-gray-100">{coin.symbol}</span>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full text-sm font-bold border border-blue-200 dark:border-blue-700">
                         {coin.recordCount}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-700 font-medium">
-                      ${formatNumber(coin.minPrice)}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-base font-bold text-gray-900 dark:text-gray-100">
+                        ${formatNumber(coin.minPrice)}
+                      </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-700 font-medium">
-                      ${formatNumber(coin.maxPrice)}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-base font-bold text-gray-900 dark:text-gray-100">
+                        ${formatNumber(coin.maxPrice)}
+                      </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-700 font-medium">
-                      ${formatNumber(coin.avgPrice)}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-base font-bold text-primary-600 dark:text-primary-400">
+                        ${formatNumber(coin.avgPrice)}
+                      </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {formatDate(coin.firstRecord)}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        {formatDate(coin.firstRecord)}
+                      </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {formatDate(coin.lastRecord)}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        {formatDate(coin.lastRecord)}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -416,32 +428,32 @@ const DatabaseManagementPage = () => {
       {/* Veritabanı Bağlantı Bilgileri */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl dark:shadow-gray-900/50 p-6 border-2 border-gray-100 dark:border-gray-700">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-6">
-          <Info className="w-6 h-6 text-primary-600" />
+          <Info className="w-6 h-6 text-primary-600 dark:text-primary-400" />
           Bağlantı Ayarları
         </h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <span className="text-sm text-gray-600 font-medium">Host:</span>
-            <p className="text-gray-900 font-semibold font-mono">localhost</p>
+          <div className="p-4 bg-gray-50 dark:bg-gray-700/80 rounded-lg border border-gray-200 dark:border-gray-600">
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Host:</span>
+            <p className="text-base font-bold text-gray-900 dark:text-gray-100 font-mono mt-1">localhost</p>
           </div>
-          <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <span className="text-sm text-gray-600 font-medium">Port:</span>
-            <p className="text-gray-900 font-semibold font-mono">5432</p>
+          <div className="p-4 bg-gray-50 dark:bg-gray-700/80 rounded-lg border border-gray-200 dark:border-gray-600">
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Port:</span>
+            <p className="text-base font-bold text-gray-900 dark:text-gray-100 font-mono mt-1">5432</p>
           </div>
-          <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <span className="text-sm text-gray-600 font-medium">Database:</span>
-            <p className="text-gray-900 font-semibold font-mono">postgres</p>
+          <div className="p-4 bg-gray-50 dark:bg-gray-700/80 rounded-lg border border-gray-200 dark:border-gray-600">
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Database:</span>
+            <p className="text-base font-bold text-gray-900 dark:text-gray-100 font-mono mt-1">postgres</p>
           </div>
-          <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <span className="text-sm text-gray-600 font-medium">User:</span>
-            <p className="text-gray-900 font-semibold font-mono">postgres</p>
+          <div className="p-4 bg-gray-50 dark:bg-gray-700/80 rounded-lg border border-gray-200 dark:border-gray-600">
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">User:</span>
+            <p className="text-base font-bold text-gray-900 dark:text-gray-100 font-mono mt-1">postgres</p>
           </div>
         </div>
         
-        <div className="mt-4 p-4 bg-primary-50 border border-primary-200 rounded-lg">
-          <p className="text-sm text-primary-700">
-            <strong>Not:</strong> Bağlantı ayarları backend'deki <code className="bg-white px-2 py-1 rounded">.env</code> dosyasından yönetilir.
+        <div className="mt-4 p-4 bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 rounded-lg">
+          <p className="text-sm font-medium text-primary-700 dark:text-primary-300">
+            <strong>Not:</strong> Bağlantı ayarları backend'deki <code className="bg-white dark:bg-gray-800 px-2 py-1 rounded text-primary-800 dark:text-primary-200 font-mono">.env</code> dosyasından yönetilir.
             Güvenlik nedeniyle şifre bilgileri gösterilmemektedir.
           </p>
         </div>

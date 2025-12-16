@@ -7,9 +7,18 @@ const schedulerService = require('../services/schedulerService');
 const MetadataService = require('../services/metadataService');
 const notesService = require('../services/notesService');
 const newsService = require('../services/newsService');
+const FiatExchangeRateService = require('../services/fiatExchangeRateService');
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
 const { DEFAULT_API_PROVIDER } = require('../config/constants');
+
+// Fiat exchange rate service instance (server.js'de initialize edilecek)
+let fiatExchangeRateService = null;
+
+// Fiat exchange rate service'i set etmek için fonksiyon
+exports.setFiatExchangeRateService = (service) => {
+  fiatExchangeRateService = service;
+};
 
 // Initialize Metadata Service
 const metadataService = new MetadataService();
@@ -1109,28 +1118,60 @@ exports.getNotesByCoin = asyncHandler(async (req, res) => {
  * News endpoints
  */
 exports.getAllNews = asyncHandler(async (req, res) => {
-  const limit = parseInt(req.query.limit) || 30;
+  const limit = Math.min(parseInt(req.query.limit) || 30, 100); // Max 100 limit
   
-  const news = await newsService.getAllNews(limit);
-  
-  res.status(200).json({
-    status: 'success',
-    data: news,
-    count: news.length
-  });
+  try {
+    const news = await newsService.getAllNews(limit);
+    
+    // Her zaman başarılı yanıt döndür (boş array bile olsa)
+    res.status(200).json({
+      status: 'success',
+      data: Array.isArray(news) ? news : [],
+      count: Array.isArray(news) ? news.length : 0
+    });
+  } catch (error) {
+    logger.error('Error in getAllNews controller:', error);
+    // Hata durumunda bile boş array döndür (uygulama çökmesin)
+    res.status(200).json({
+      status: 'success',
+      data: [],
+      count: 0,
+      message: 'Haberler yüklenirken bir sorun oluştu'
+    });
+  }
 });
 
 exports.getNewsByCoin = asyncHandler(async (req, res) => {
   const { symbol } = req.params;
-  const limit = parseInt(req.query.limit) || 20;
+  const limit = Math.min(parseInt(req.query.limit) || 20, 100); // Max 100 limit
   
-  const news = await newsService.searchNewsByCoin(symbol, limit);
+  if (!symbol || symbol.trim().length === 0) {
+    return res.status(200).json({
+      status: 'success',
+      data: [],
+      count: 0
+    });
+  }
   
-  res.status(200).json({
-    status: 'success',
-    data: news,
-    count: news.length
-  });
+  try {
+    const news = await newsService.searchNewsByCoin(symbol.trim(), limit);
+    
+    // Her zaman başarılı yanıt döndür (boş array bile olsa)
+    res.status(200).json({
+      status: 'success',
+      data: Array.isArray(news) ? news : [],
+      count: Array.isArray(news) ? news.length : 0
+    });
+  } catch (error) {
+    logger.error('Error in getNewsByCoin controller:', error);
+    // Hata durumunda bile boş array döndür (uygulama çökmesin)
+    res.status(200).json({
+      status: 'success',
+      data: [],
+      count: 0,
+      message: `${symbol} için haberler yüklenirken bir sorun oluştu`
+    });
+  }
 });
 
 /**
@@ -1189,22 +1230,131 @@ exports.calculateROI = asyncHandler(async (req, res) => {
   });
 });
 
+// Fiat para birimleri listesi
+const FIAT_CURRENCIES = [
+  'USD', 'EUR', 'TRY', 'SAR', 'GBP', 'JPY', 'CNY', 'INR', 'KRW', 'BRL',
+  'MXN', 'CAD', 'AUD', 'CHF', 'NZD', 'SEK', 'NOK', 'DKK', 'PLN', 'HUF',
+  'CZK', 'RON', 'BGN', 'HRK', 'RUB', 'ILS', 'AED', 'QAR', 'KWD', 'BHD',
+  'OMR', 'JOD', 'EGP', 'ZAR', 'THB', 'SGD', 'MYR', 'IDR', 'PHP', 'VND'
+];
+
+// Para biriminin fiat olup olmadığını kontrol eder
+const isFiatCurrency = (symbol) => {
+  return FIAT_CURRENCIES.includes(symbol.toUpperCase());
+};
+
 exports.convertCurrency = asyncHandler(async (req, res) => {
-  const { amount, fromPrice, toPrice } = req.body;
+  const { amount, fromSymbol, toSymbol } = req.body;
   
-  if (!amount || !fromPrice || !toPrice) {
-    throw new AppError('amount, fromPrice ve toPrice parametreleri gerekli', 400);
+  // Validation
+  if (!amount || parseFloat(amount) <= 0) {
+    throw new AppError('Geçerli bir miktar gerekli', 400);
   }
   
-  const convertedAmount = (amount * fromPrice) / toPrice;
+  if (!fromSymbol || !toSymbol) {
+    throw new AppError('fromSymbol ve toSymbol parametreleri gerekli', 400);
+  }
+  
+  if (fromSymbol === toSymbol) {
+    throw new AppError('Kaynak ve hedef para birimi aynı olamaz', 400);
+  }
+  
+  let fromPrice = null;
+  let toPrice = null;
+  
+  // Kaynak para birimi için fiyat/kur çekme
+  if (fromSymbol.toUpperCase() === 'USD') {
+    fromPrice = 1;
+  } else if (isFiatCurrency(fromSymbol)) {
+    // Fiat para birimi ise veritabanından veya servisten kur çek
+    try {
+      if (fiatExchangeRateService) {
+        fromPrice = await fiatExchangeRateService.getExchangeRate(fromSymbol);
+      } else {
+        // Fallback: Direkt veritabanından oku
+        const dbRate = await databaseService.getFiatExchangeRate(fromSymbol);
+        if (dbRate && dbRate.rate_to_usd) {
+          fromPrice = parseFloat(dbRate.rate_to_usd);
+        } else {
+          // Veritabanında yoksa CoinGecko'dan direkt çek (fallback)
+          logger.info(`🔄 ${fromSymbol} veritabanında yok, API'den çekiliyor...`);
+          fromPrice = await coingeckoService.getFiatExchangeRate(fromSymbol);
+          // Veritabanına kaydet (hata olsa bile devam et)
+          databaseService.saveFiatExchangeRate(fromSymbol, fromPrice).catch(err => {
+            logger.warn(`⚠️ ${fromSymbol} veritabanına kaydedilemedi: ${err.message}`);
+          });
+        }
+      }
+    } catch (error) {
+      logger.error(`Error getting fiat rate for ${fromSymbol}:`, error);
+      throw new AppError(`${fromSymbol} için kur bilgisi alınamadı. Lütfen birkaç saniye sonra tekrar deneyin.`, 500);
+    }
+  } else {
+    // Kripto para ise veritabanından fiyat çek
+    const dbSymbol = fromSymbol + 'USDT';
+    const fromPriceData = await databaseService.getLatestPrice(dbSymbol);
+    if (!fromPriceData || !fromPriceData.price) {
+      throw new AppError(`${fromSymbol} için fiyat bulunamadı. Lütfen önce fiyatları güncelleyin.`, 404);
+    }
+    fromPrice = parseFloat(fromPriceData.price);
+  }
+  
+  // Hedef para birimi için fiyat/kur çekme
+  if (toSymbol.toUpperCase() === 'USD') {
+    toPrice = 1;
+  } else if (isFiatCurrency(toSymbol)) {
+    // Fiat para birimi ise veritabanından veya servisten kur çek
+    try {
+      if (fiatExchangeRateService) {
+        toPrice = await fiatExchangeRateService.getExchangeRate(toSymbol);
+      } else {
+        // Fallback: Direkt veritabanından oku
+        const dbRate = await databaseService.getFiatExchangeRate(toSymbol);
+        if (dbRate && dbRate.rate_to_usd) {
+          toPrice = parseFloat(dbRate.rate_to_usd);
+        } else {
+          // Veritabanında yoksa CoinGecko'dan direkt çek (fallback)
+          logger.info(`🔄 ${toSymbol} veritabanında yok, API'den çekiliyor...`);
+          toPrice = await coingeckoService.getFiatExchangeRate(toSymbol);
+          // Veritabanına kaydet (hata olsa bile devam et)
+          databaseService.saveFiatExchangeRate(toSymbol, toPrice).catch(err => {
+            logger.warn(`⚠️ ${toSymbol} veritabanına kaydedilemedi: ${err.message}`);
+          });
+        }
+      }
+    } catch (error) {
+      logger.error(`Error getting fiat rate for ${toSymbol}:`, error);
+      throw new AppError(`${toSymbol} için kur bilgisi alınamadı. Lütfen birkaç saniye sonra tekrar deneyin.`, 500);
+    }
+  } else {
+    // Kripto para ise veritabanından fiyat çek
+    const dbSymbol = toSymbol + 'USDT';
+    const toPriceData = await databaseService.getLatestPrice(dbSymbol);
+    if (!toPriceData || !toPriceData.price) {
+      throw new AppError(`${toSymbol} için fiyat bulunamadı. Lütfen önce fiyatları güncelleyin.`, 404);
+    }
+    toPrice = parseFloat(toPriceData.price);
+  }
+  
+  // Dönüşüm hesaplama
+  // Önce kaynak coin'i USD'ye çevir, sonra hedef coin'e çevir
+  const amountInUSD = parseFloat(amount) * fromPrice;
+  const convertedAmount = amountInUSD / toPrice;
+  
+  // Kur hesaplama (1 kaynak coin = X hedef coin)
+  const exchangeRate = fromPrice / toPrice;
   
   res.status(200).json({
     status: 'success',
     data: {
-      amount,
+      amount: parseFloat(amount),
+      fromSymbol,
+      toSymbol,
       fromPrice,
       toPrice,
-      convertedAmount: parseFloat(convertedAmount.toFixed(8))
+      convertedAmount: parseFloat(convertedAmount.toFixed(8)),
+      exchangeRate: parseFloat(exchangeRate.toFixed(8)),
+      amountInUSD: parseFloat(amountInUSD.toFixed(2))
     }
   });
 });

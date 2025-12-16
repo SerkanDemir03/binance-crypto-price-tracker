@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { useQuery } from 'react-query'
 import { cryptoAPI } from '../../services/api'
-import { Calculator, TrendingUp, TrendingDown, ArrowRightLeft } from 'lucide-react'
+import { TrendingUp, TrendingDown, ArrowRightLeft } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const CalculatorPage = () => {
@@ -15,21 +16,61 @@ const CalculatorPage = () => {
   })
   const [profitLossResult, setProfitLossResult] = useState(null)
 
-  // ROI Calculator
-  const [roi, setRoi] = useState({
-    initialInvestment: '',
-    currentValue: '',
-    fees: '0.1'
-  })
-  const [roiResult, setRoiResult] = useState(null)
-
   // Currency Converter
   const [converter, setConverter] = useState({
     amount: '',
-    fromPrice: '',
-    toPrice: ''
+    fromSymbol: '',
+    toSymbol: ''
   })
   const [converterResult, setConverterResult] = useState(null)
+  const [isConverting, setIsConverting] = useState(false)
+
+  // Fetch coin list for converter
+  const { data: coinsData, isLoading: isLoadingCoins } = useQuery(
+    ['coinsForConverter'],
+    async () => {
+      const response = await cryptoAPI.getLatestPricesFromDB()
+      return response.data
+    },
+    {
+      refetchOnWindowFocus: false,
+      staleTime: 5 * 60 * 1000, // 5 dakika cache
+    }
+  )
+
+  // Fiat para birimleri listesi
+  const fiatCurrencies = [
+    'USD', 'EUR', 'TRY', 'SAR', 'GBP', 'JPY', 'CNY', 'INR', 'KRW', 'BRL',
+    'MXN', 'CAD', 'AUD', 'CHF', 'NZD', 'SEK', 'NOK', 'DKK', 'PLN', 'HUF',
+    'CZK', 'RON', 'BGN', 'HRK', 'RUB', 'ILS', 'AED', 'QAR', 'KWD', 'BHD',
+    'OMR', 'JOD', 'EGP', 'ZAR', 'THB', 'SGD', 'MYR', 'IDR', 'PHP', 'VND'
+  ]
+
+  // Extract unique coin symbols from prices
+  const availableCoins = useMemo(() => {
+    const fiatSet = new Set(fiatCurrencies)
+    const cryptoSet = new Set()
+    
+    if (coinsData?.data) {
+      coinsData.data.forEach((price) => {
+        const symbol = price.name.replace('USDT', '')
+        if (symbol && !fiatCurrencies.includes(symbol)) {
+          cryptoSet.add(symbol)
+        }
+      })
+    }
+    
+    // Fiat para birimlerini alfabetik sırala
+    const sortedFiat = Array.from(fiatSet).sort((a, b) => a.localeCompare(b))
+    
+    // Kripto paraları alfabetik sırala
+    const sortedCrypto = Array.from(cryptoSet).sort((a, b) => a.localeCompare(b))
+    
+    return {
+      fiat: sortedFiat,
+      crypto: sortedCrypto
+    }
+  }, [coinsData])
 
   const calculateProfitLoss = async () => {
     try {
@@ -40,21 +81,38 @@ const CalculatorPage = () => {
     }
   }
 
-  const calculateROI = async () => {
-    try {
-      const result = await cryptoAPI.calculateROI(roi)
-      setRoiResult(result.data.data)
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Hesaplama yapılırken hata oluştu')
-    }
-  }
 
   const convertCurrency = async () => {
+    // Validation
+    if (!converter.amount || parseFloat(converter.amount) <= 0) {
+      toast.error('Lütfen geçerli bir miktar girin')
+      return
+    }
+    
+    if (!converter.fromSymbol) {
+      toast.error('Lütfen kaynak para birimini seçin')
+      return
+    }
+    
+    if (!converter.toSymbol) {
+      toast.error('Lütfen hedef para birimini seçin')
+      return
+    }
+    
+    if (converter.fromSymbol === converter.toSymbol) {
+      toast.error('Kaynak ve hedef para birimi aynı olamaz')
+      return
+    }
+
+    setIsConverting(true)
     try {
       const result = await cryptoAPI.convertCurrency(converter)
       setConverterResult(result.data.data)
     } catch (error) {
       toast.error(error.response?.data?.message || 'Dönüştürme yapılırken hata oluştu')
+      setConverterResult(null)
+    } finally {
+      setIsConverting(false)
     }
   }
 
@@ -70,7 +128,7 @@ const CalculatorPage = () => {
       <div className="max-w-4xl mx-auto">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Kripto Para Hesap Makinesi</h1>
-          <p className="text-gray-600 dark:text-gray-400">Kâr/zarar, ROI ve dönüşüm hesaplamaları yapın</p>
+          <p className="text-gray-600 dark:text-gray-400">Kâr/zarar ve dönüşüm hesaplamaları yapın</p>
         </div>
 
         {/* Tabs */}
@@ -86,19 +144,6 @@ const CalculatorPage = () => {
             <div className="flex items-center gap-2">
               <TrendingUp size={20} />
               Kâr/Zarar
-            </div>
-          </button>
-          <button
-            onClick={() => setActiveTab('roi')}
-            className={`px-4 py-2 font-medium transition ${
-              activeTab === 'roi'
-                ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <Calculator size={20} />
-              ROI
             </div>
           </button>
           <button
@@ -208,80 +253,6 @@ const CalculatorPage = () => {
           </div>
         )}
 
-        {/* ROI Calculator */}
-        {activeTab === 'roi' && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">ROI Hesaplayıcı</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Başlangıç Yatırımı (USD)
-                </label>
-                <input
-                  type="number"
-                  value={roi.initialInvestment}
-                  onChange={(e) => setRoi({ ...roi, initialInvestment: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                  placeholder="0.00"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Mevcut Değer (USD)
-                </label>
-                <input
-                  type="number"
-                  value={roi.currentValue}
-                  onChange={(e) => setRoi({ ...roi, currentValue: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                  placeholder="0.00"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  İşlem Ücreti (%)
-                </label>
-                <input
-                  type="number"
-                  value={roi.fees}
-                  onChange={(e) => setRoi({ ...roi, fees: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                  placeholder="0.1"
-                  step="0.01"
-                />
-              </div>
-              <button
-                onClick={calculateROI}
-                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-              >
-                Hesapla
-              </button>
-              {roiResult && (
-                <div className={`mt-4 p-4 rounded-lg ${roiResult.isProfit ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
-                  <div className="flex items-center gap-2 mb-2">
-                    {roiResult.isProfit ? (
-                      <TrendingUp className="text-green-600 dark:text-green-400" size={24} />
-                    ) : (
-                      <TrendingDown className="text-red-600 dark:text-red-400" size={24} />
-                    )}
-                    <h3 className={`text-lg font-semibold ${roiResult.isProfit ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
-                      ROI: {roiResult.roi}%
-                    </h3>
-                  </div>
-                  <div className="space-y-1 text-sm">
-                    <p className="text-gray-700 dark:text-gray-300">
-                      <span className="font-medium">Kâr/Zarar:</span> ${formatNumber(roiResult.profitLoss)}
-                    </p>
-                    <p className="text-gray-700 dark:text-gray-300">
-                      <span className="font-medium">Net Değer:</span> ${formatNumber(roiResult.netValue)}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* Currency Converter */}
         {activeTab === 'convert' && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
@@ -293,49 +264,121 @@ const CalculatorPage = () => {
                 </label>
                 <input
                   type="number"
+                  step="any"
                   value={converter.amount}
                   onChange={(e) => setConverter({ ...converter, amount: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="0.00"
+                  min="0"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Kaynak Fiyat (USD)
+                  Kaynak Para Birimi
                 </label>
-                <input
-                  type="number"
-                  value={converter.fromPrice}
-                  onChange={(e) => setConverter({ ...converter, fromPrice: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                  placeholder="0.00"
-                />
+                <select
+                  value={converter.fromSymbol}
+                  onChange={(e) => setConverter({ ...converter, fromSymbol: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  disabled={isLoadingCoins}
+                >
+                  <option value="">Para birimi seçin...</option>
+                  
+                  {/* Fiat Para Birimleri */}
+                  {availableCoins.fiat.length > 0 && (
+                    <optgroup label="💵 Fiat Para Birimleri" className="font-semibold text-gray-700 dark:text-gray-300">
+                      {availableCoins.fiat.map((coin) => (
+                        <option key={coin} value={coin}>
+                          {coin}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  
+                  {/* Kripto Paralar */}
+                  {availableCoins.crypto.length > 0 && (
+                    <optgroup label="₿ Kripto Paralar" className="font-semibold text-gray-700 dark:text-gray-300">
+                      {availableCoins.crypto.map((coin) => (
+                        <option key={coin} value={coin}>
+                          {coin}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Hedef Fiyat (USD)
+                  Hedef Para Birimi
                 </label>
-                <input
-                  type="number"
-                  value={converter.toPrice}
-                  onChange={(e) => setConverter({ ...converter, toPrice: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                  placeholder="0.00"
-                />
+                <select
+                  value={converter.toSymbol}
+                  onChange={(e) => setConverter({ ...converter, toSymbol: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  disabled={isLoadingCoins}
+                >
+                  <option value="">Para birimi seçin...</option>
+                  
+                  {/* Fiat Para Birimleri */}
+                  {availableCoins.fiat.length > 0 && (
+                    <optgroup label="💵 Fiat Para Birimleri" className="font-semibold text-gray-700 dark:text-gray-300">
+                      {availableCoins.fiat.map((coin) => (
+                        <option key={coin} value={coin}>
+                          {coin}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  
+                  {/* Kripto Paralar */}
+                  {availableCoins.crypto.length > 0 && (
+                    <optgroup label="₿ Kripto Paralar" className="font-semibold text-gray-700 dark:text-gray-300">
+                      {availableCoins.crypto.map((coin) => (
+                        <option key={coin} value={coin}>
+                          {coin}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
               </div>
               <button
                 onClick={convertCurrency}
-                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                disabled={isConverting || isLoadingCoins}
+                className={`w-full px-4 py-2 rounded-lg transition ${
+                  isConverting || isLoadingCoins
+                    ? 'bg-gray-400 dark:bg-gray-600 text-white cursor-not-allowed'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
               >
-                Dönüştür
+                {isConverting ? 'Hesaplanıyor...' : 'Dönüştür'}
               </button>
               {converterResult && (
-                <div className="mt-4 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20">
-                  <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-400 mb-2">Sonuç</h3>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    <span className="font-medium">{formatNumber(converter.amount)}</span> coin (${formatNumber(converter.fromPrice)}/coin) ={' '}
-                    <span className="font-medium">{formatNumber(converterResult.convertedAmount)}</span> coin (${formatNumber(converter.toPrice)}/coin)
-                  </p>
+                <div className="mt-4 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center gap-2 mb-3">
+                    <ArrowRightLeft className="text-blue-600 dark:text-blue-400" size={20} />
+                    <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-400">Dönüşüm Sonucu</h3>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <p className="text-gray-700 dark:text-gray-300">
+                      <span className="font-medium">{formatNumber(converter.amount)}</span>{' '}
+                      <span className="font-semibold text-blue-600 dark:text-blue-400">{converter.fromSymbol}</span>
+                    </p>
+                    <div className="flex items-center justify-center text-gray-400 dark:text-gray-500">
+                      <ArrowRightLeft size={16} />
+                    </div>
+                    <p className="text-gray-700 dark:text-gray-300">
+                      <span className="font-medium text-lg">{formatNumber(converterResult.convertedAmount)}</span>{' '}
+                      <span className="font-semibold text-blue-600 dark:text-blue-400">{converter.toSymbol}</span>
+                    </p>
+                    {converterResult.fromPrice && converterResult.toPrice && (
+                      <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800 text-xs text-gray-600 dark:text-gray-400">
+                        <p>1 {converter.fromSymbol} = {formatNumber(converterResult.fromPrice)} USD</p>
+                        <p>1 {converter.toSymbol} = {formatNumber(converterResult.toPrice)} USD</p>
+                        <p className="mt-1 font-medium">Kur: {formatNumber(converterResult.exchangeRate)}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

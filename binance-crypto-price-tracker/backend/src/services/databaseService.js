@@ -38,6 +38,9 @@ class DatabaseService {
       // Also create metadata table
       await this.createMetadataTable();
       
+      // Also create fiat exchange rates table
+      await this.createFiatExchangeRatesTable();
+      
       return true;
     } catch (error) {
       logger.error('Error creating table:', error);
@@ -92,6 +95,111 @@ class DatabaseService {
     } catch (error) {
       logger.error('Error creating metadata table:', error);
       throw new AppError('Metadata tablosu oluşturulurken hata oluştu', 500);
+    }
+  }
+
+  /**
+   * Fiat exchange rates tablosunu oluşturur (yoksa)
+   * Stores fiat currency exchange rates with caching to avoid rate limits
+   */
+  async createFiatExchangeRatesTable() {
+    try {
+      logger.info('Creating fiat exchange rates table: fiat_exchange_rates');
+      
+      const createQuery = `
+        CREATE TABLE IF NOT EXISTS fiat_exchange_rates (
+          id SERIAL PRIMARY KEY,
+          currency VARCHAR(10) UNIQUE NOT NULL,
+          rate_to_usd NUMERIC NOT NULL,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `;
+
+      await pool.query(createQuery);
+      
+      // Create indexes for faster queries
+      try {
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_fiat_currency ON fiat_exchange_rates(currency);`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_fiat_updated_at ON fiat_exchange_rates(updated_at DESC);`);
+      } catch (indexError) {
+        logger.warn(`Fiat exchange rates index oluşturulurken hata (devam ediliyor):`, indexError.message);
+      }
+      
+      logger.info('✅ Fiat exchange rates table created or already exists');
+      return true;
+    } catch (error) {
+      logger.error('Error creating fiat exchange rates table:', error);
+      throw new AppError('Fiat exchange rates tablosu oluşturulurken hata oluştu', 500);
+    }
+  }
+
+  /**
+   * Fiat para biriminin USD karşılığını veritabanından getirir
+   * @param {string} currency - Para birimi kodu (EUR, TRY, SAR, vb.)
+   * @returns {Promise<number|null>} USD karşılığı veya null
+   */
+  async getFiatExchangeRate(currency) {
+    try {
+      const query = `
+        SELECT rate_to_usd, updated_at 
+        FROM fiat_exchange_rates 
+        WHERE currency = $1
+        ORDER BY updated_at DESC
+        LIMIT 1
+      `;
+      
+      const result = await pool.query(query, [currency.toUpperCase()]);
+      return result.rows[0] || null;
+    } catch (error) {
+      logger.error('Error getting fiat exchange rate:', error);
+      throw new AppError('Fiat exchange rate getirilirken hata oluştu', 500);
+    }
+  }
+
+  /**
+   * Fiat para biriminin USD karşılığını veritabanına kaydeder veya günceller
+   * @param {string} currency - Para birimi kodu
+   * @param {number} rate - USD karşılığı
+   * @returns {Promise<boolean>}
+   */
+  async saveFiatExchangeRate(currency, rate) {
+    try {
+      const query = `
+        INSERT INTO fiat_exchange_rates (currency, rate_to_usd, updated_at)
+        VALUES ($1, $2, CURRENT_TIMESTAMP)
+        ON CONFLICT (currency) 
+        DO UPDATE SET 
+          rate_to_usd = EXCLUDED.rate_to_usd,
+          updated_at = CURRENT_TIMESTAMP
+      `;
+      
+      await pool.query(query, [currency.toUpperCase(), rate]);
+      logger.debug(`✅ Fiat exchange rate kaydedildi: ${currency} = ${rate} USD`);
+      return true;
+    } catch (error) {
+      logger.error('Error saving fiat exchange rate:', error);
+      throw new AppError('Fiat exchange rate kaydedilirken hata oluştu', 500);
+    }
+  }
+
+  /**
+   * Tüm fiat exchange rate'leri getirir
+   * @returns {Promise<Array>}
+   */
+  async getAllFiatExchangeRates() {
+    try {
+      const query = `
+        SELECT currency, rate_to_usd, updated_at 
+        FROM fiat_exchange_rates 
+        ORDER BY currency
+      `;
+      
+      const result = await pool.query(query);
+      return result.rows;
+    } catch (error) {
+      logger.error('Error getting all fiat exchange rates:', error);
+      throw new AppError('Fiat exchange rate\'leri getirilirken hata oluştu', 500);
     }
   }
 
