@@ -176,5 +176,13 @@ export const cryptoAPI = {
   convertCurrency: (data) => api.post('/crypto/calculator/convert', data),
 }
 
+// Chatbot API functions
+export const chatbotAPI = {
+  sendMessage: (message, userId = 'default') => 
+    api.post('/crypto/chatbot/message', { message, userId }),
+  clearHistory: (userId = 'default') => 
+    api.post('/crypto/chatbot/clear-history', { userId }),
+}
+
 export default api
 

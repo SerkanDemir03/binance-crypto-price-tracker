@@ -150,4 +150,8 @@ router.post('/calculator/profit-loss', cryptoController.calculateProfitLoss);
 router.post('/calculator/roi', cryptoController.calculateROI);
 router.post('/calculator/convert', cryptoController.convertCurrency);
 
+// Chatbot routes
+router.post('/chatbot/message', cryptoController.chatbotMessage);
+router.post('/chatbot/clear-history', cryptoController.clearChatbotHistory);
+
 module.exports = router;

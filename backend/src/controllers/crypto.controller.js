@@ -8,6 +8,7 @@ const MetadataService = require('../services/metadataService');
 const notesService = require('../services/notesService');
 const newsService = require('../services/newsService');
 const FiatExchangeRateService = require('../services/fiatExchangeRateService');
+const chatbotService = require('../services/chatbotService');
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
 const { DEFAULT_API_PROVIDER } = require('../config/constants');
@@ -1356,6 +1357,41 @@ exports.convertCurrency = asyncHandler(async (req, res) => {
       exchangeRate: parseFloat(exchangeRate.toFixed(8)),
       amountInUSD: parseFloat(amountInUSD.toFixed(2))
     }
+  });
+});
+
+/**
+ * Chatbot mesajı işle ve yanıt oluştur
+ */
+exports.chatbotMessage = asyncHandler(async (req, res) => {
+  const { message, userId } = req.body;
+
+  if (!message || typeof message !== 'string' || message.trim().length === 0) {
+    throw new AppError('Mesaj boş olamaz', 400);
+  }
+
+  if (message.length > 500) {
+    throw new AppError('Mesaj çok uzun (maksimum 500 karakter)', 400);
+  }
+
+  const response = await chatbotService.generateResponse(message, userId || 'default');
+
+  res.status(200).json({
+    status: 'success',
+    data: response
+  });
+});
+
+/**
+ * Chatbot konuşma geçmişini temizle
+ */
+exports.clearChatbotHistory = asyncHandler(async (req, res) => {
+  const { userId } = req.body;
+  chatbotService.clearHistory(userId || 'default');
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Konuşma geçmişi temizlendi'
   });
 });
 
