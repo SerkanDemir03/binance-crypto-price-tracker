@@ -8,6 +8,36 @@ const rateLimitService = require('./rateLimitService');
 const COINGECKO_API_URL = 'https://api.coingecko.com/api/v3/simple/price';
 const COINGECKO_EXCHANGE_RATES_URL = 'https://api.coingecko.com/api/v3/exchange_rates';
 
+/**
+ * Executes an Axios GET request with automatic retry logic for CoinGecko API
+ * to handle ECONNRESET, ETIMEDOUT, 429 (rate limits), and server errors.
+ */
+async function executeCoingeckoRequest(url, config = {}, retries = 3) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await axios.get(url, {
+        ...config,
+        timeout: config.timeout || 15000
+      });
+      return response;
+    } catch (error) {
+      lastError = error;
+      const status = error.response?.status;
+      const isRetryable = error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT' || status === 429 || status >= 500;
+
+      if (isRetryable && attempt < retries) {
+        const delay = status === 429 ? 3000 * attempt : 1500 * attempt;
+        logger.warn(`⚠️ CoinGecko isteği başarısız (${url}): ${error.message || status}. ${delay/1000} saniye sonra tekrar denenecek... (Deneme ${attempt}/${retries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
 // Binance symbol'lerini CoinGecko ID'lerine map et
 const SYMBOL_TO_COINGECKO_ID = {
   'BTCUSDT': 'bitcoin',
@@ -73,6 +103,9 @@ const SYMBOL_TO_COINGECKO_ID = {
   'PAXUSDT': 'paxos-standard',
   'USDSUSDT': 'usd-coin',
   'ONGUSDT': 'ontology-gas',
+  'VENUSDT': 'vechain',      // VEN eski sembol
+  'NULSUSDT': 'nuls',
+  'BTTUSDT': 'bittorrent',
 };
 
 class CoinGeckoService {
@@ -107,7 +140,7 @@ class CoinGeckoService {
       }
 
       // CoinGecko API'den fiyatları çek (USD cinsinden)
-      const response = await axios.get(COINGECKO_API_URL, {
+      const response = await executeCoingeckoRequest(COINGECKO_API_URL, {
         params: {
           ids: coinIds.join(','),
           vs_currencies: 'usd',
@@ -422,8 +455,19 @@ class CoinGeckoService {
   }
 
   /**
+   * Sembol (BTC, ETH vb.) veya USDT çifti (BTCUSDT) için CoinGecko ID döndürür.
+   * Önce SYMBOL_TO_COINGECKO_ID map'ine bakar, yoksa null döner.
+   */
+  getCoinIdFromMap(symbol) {
+    const raw = (symbol || '').trim().toUpperCase();
+    if (!raw) return null;
+    const withUsdt = raw.endsWith('USDT') ? raw : raw + 'USDT';
+    return SYMBOL_TO_COINGECKO_ID[withUsdt] || null;
+  }
+
+  /**
    * Birden fazla coin'in fiyatını çeker (custom coin listesi için)
-   * Optimize edilmiş: Paralel search yaparak daha hızlı çalışır
+   * Önce sabit map kullanır (search API çağrılmaz), sadece map'te olmayanlar için findCoinId kullanır
    */
   async getPricesBySymbols(symbols) {
     try {
@@ -431,57 +475,83 @@ class CoinGeckoService {
         return [];
       }
 
-      logger.info(`🔄 ${symbols.length} coin için CoinGecko ID'leri aranıyor (paralel)...`);
-      
-      // Paralel olarak tüm symbol'ler için CoinGecko ID bul (çok daha hızlı)
-      const coinIdPromises = symbols.map(symbol => 
-        this.findCoinId(symbol).catch(err => {
-          logger.warn(`⚠️ ${symbol} için CoinGecko ID bulunamadı: ${err.message}`);
-          return null;
-        })
-      );
-      
-      const coinIdResults = await Promise.all(coinIdPromises);
-      
-      const coinIds = [];
-      const symbolToIdMap = {};
-      
-      // Başarılı sonuçları topla
-      coinIdResults.forEach((coinId, index) => {
-        if (coinId) {
-          coinIds.push(coinId);
-          symbolToIdMap[coinId] = symbols[index].toUpperCase();
-        }
-      });
+      const symbolCoinPairs = [];
+      const symbolsToSearch = [];
 
-      if (coinIds.length === 0) {
+      for (let i = 0; i < symbols.length; i++) {
+        const sym = symbols[i];
+        const base = sym.toUpperCase().replace(/USDT$/, '');
+        const coinId = this.getCoinIdFromMap(sym);
+        if (coinId) {
+          symbolCoinPairs.push({ baseSymbol: base, coinId });
+        } else {
+          symbolsToSearch.push({ symbol: sym, base: base });
+        }
+      }
+
+      if (symbolsToSearch.length > 0) {
+        logger.info(`🔄 ${symbolsToSearch.length} coin için CoinGecko ID aranıyor (map'te yok)...`);
+        const searchPromises = symbolsToSearch.map(({ symbol }) =>
+          this.findCoinId(symbol).catch(err => {
+            logger.warn(`⚠️ ${symbol} için CoinGecko ID bulunamadı: ${err.message}`);
+            return null;
+          })
+        );
+        const searchResults = await Promise.all(searchPromises);
+        searchResults.forEach((coinId, j) => {
+          if (coinId) {
+            symbolCoinPairs.push({ baseSymbol: symbolsToSearch[j].base, coinId });
+          }
+        });
+      }
+
+      if (symbolCoinPairs.length === 0) {
         logger.warn(`⚠️ Hiçbir coin için CoinGecko ID bulunamadı`);
         return [];
       }
 
-      logger.info(`✅ ${coinIds.length}/${symbols.length} coin için CoinGecko ID bulundu, fiyatlar çekiliyor...`);
+      const uniqueCoinIds = [...new Set(symbolCoinPairs.map(p => p.coinId))];
+      logger.info(`✅ ${symbolCoinPairs.length}/${symbols.length} coin için CoinGecko ID hazır, fiyatlar çekiliyor...`);
 
-      // Tüm fiyatları tek istekle çek (batch request - çok daha hızlı)
-      const response = await axios.get(COINGECKO_API_URL, {
-        params: {
-          ids: coinIds.join(','),
-          vs_currencies: 'usd'
-        },
-        timeout: 20000 // 20 saniye timeout (çok coin için)
-      });
+      if (!rateLimitService.canMakeRequest('coingecko', 1200)) {
+        await rateLimitService.waitForBackoff('coingecko');
+      }
 
-      if (response.status === 200 && response.data) {
+      let response;
+      const maxRetries = 3;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          response = await axios.get(COINGECKO_API_URL, {
+            params: {
+              ids: uniqueCoinIds.join(','),
+              vs_currencies: 'usd'
+            },
+            timeout: 20000
+          });
+          if (response && response.status === 200) break;
+        } catch (err) {
+          const isRetryable = err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT' || (err.response && err.response.status >= 500);
+          if (isRetryable && attempt < maxRetries) {
+            logger.warn(`⚠️ CoinGecko isteği başarısız (deneme ${attempt}/${maxRetries}), ${err.code || err.message}. Tekrar denenecek...`);
+            await new Promise(r => setTimeout(r, 1500 * attempt));
+            continue;
+          }
+          throw err;
+        }
+      }
+
+      if (response && response.status === 200 && response.data) {
         const prices = [];
-        for (const [coinId, priceData] of Object.entries(response.data)) {
-          if (priceData.usd && symbolToIdMap[coinId]) {
+        for (const { baseSymbol, coinId } of symbolCoinPairs) {
+          const priceData = response.data[coinId];
+          if (priceData && priceData.usd != null) {
             prices.push({
-              symbol: symbolToIdMap[coinId] + 'USDT', // Binance formatına uyumlu (veritabanı için)
+              symbol: baseSymbol + 'USDT',
               price: parseFloat(priceData.usd)
             });
           }
         }
-        
-        logger.info(`✅ ${prices.length} coin fiyatı başarıyla çekildi`);
+        logger.info(`✅ ${prices.length} coin fiyatı CoinGecko'dan çekildi`);
         return prices;
       }
 
@@ -517,7 +587,7 @@ class CoinGeckoService {
       }
 
       // CoinGecko exchange rates API'den tüm kurları çek
-      const response = await axios.get(COINGECKO_EXCHANGE_RATES_URL, {
+      const response = await executeCoingeckoRequest(COINGECKO_EXCHANGE_RATES_URL, {
         timeout: 10000,
         headers: {
           'Accept': 'application/json'
@@ -553,6 +623,111 @@ class CoinGeckoService {
     } catch (error) {
       logger.error(`❌ Error getting fiat exchange rate for ${currency}:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Get 24h change, 7d change, and 7d sparkline graphs from CoinGecko in a single batch call!
+   * @param {string[]} symbols - Array of symbols (e.g. ['BTCUSDT', 'ETHUSDT'])
+   * @returns {Promise<Object>} { change24h: {...}, change7d: {...}, klines: {...} }
+   */
+  async getMarketStatsBatch(symbols) {
+    try {
+      if (!symbols || symbols.length === 0) {
+        return { change24h: {}, change7d: {}, klines: {} };
+      }
+
+      const symbolCoinPairs = [];
+      const symbolsToSearch = [];
+
+      for (const sym of symbols) {
+        const base = sym.toUpperCase().replace(/USDT$/, '');
+        const coinId = this.getCoinIdFromMap(sym);
+        if (coinId) {
+          symbolCoinPairs.push({ symbol: sym, coinId });
+        } else {
+          symbolsToSearch.push({ symbol: sym });
+        }
+      }
+
+      if (symbolsToSearch.length > 0) {
+        logger.info(`🔍 Mapping ${symbolsToSearch.length} symbols for CoinGecko stats...`);
+        const searchPromises = symbolsToSearch.map(async ({ symbol }) => {
+          try {
+            const coinId = await this.findCoinId(symbol);
+            if (coinId) symbolCoinPairs.push({ symbol, coinId });
+          } catch (err) {
+            logger.warn(`⚠️ ID map failed for ${symbol}:`, err.message);
+          }
+        });
+        await Promise.all(searchPromises);
+      }
+
+      if (symbolCoinPairs.length === 0) {
+        logger.warn('⚠️ No CoinGecko IDs mapped for batch stats');
+        return { change24h: {}, change7d: {}, klines: {} };
+      }
+
+      const uniqueIds = [...new Set(symbolCoinPairs.map(p => p.coinId))];
+      logger.info(`🔄 Fetching batch markets data from CoinGecko for ${uniqueIds.length} coins...`);
+
+      if (!rateLimitService.canMakeRequest('coingecko', 1200)) {
+        await rateLimitService.waitForBackoff('coingecko');
+      }
+
+      const response = await executeCoingeckoRequest('https://api.coingecko.com/api/v3/coins/markets', {
+        params: {
+          vs_currency: 'usd',
+          ids: uniqueIds.join(','),
+          price_change_percentage: '24h,7d',
+          sparkline: true
+        },
+        timeout: 20000
+      });
+
+      const change24h = {};
+      const change7d = {};
+      const klines = {};
+
+      if (response.status === 200 && Array.isArray(response.data)) {
+        const now = Date.now();
+        
+        for (const coinData of response.data) {
+          const coinId = coinData.id;
+          const mappedPairs = symbolCoinPairs.filter(p => p.coinId === coinId);
+          
+          for (const pair of mappedPairs) {
+            const sym = pair.symbol.toUpperCase().endsWith('USDT') ? pair.symbol.toUpperCase() : pair.symbol.toUpperCase() + 'USDT';
+            
+            // 24h change
+            const p24h = parseFloat(coinData.price_change_percentage_24h);
+            change24h[sym] = Number.isFinite(p24h) ? p24h : 0;
+            
+            // 7d change
+            const p7d = parseFloat(coinData.price_change_percentage_7d_in_currency);
+            change7d[sym] = Number.isFinite(p7d) ? p7d : 0;
+            
+            // 7d sparkline / klines
+            if (coinData.sparkline_in_7d && Array.isArray(coinData.sparkline_in_7d.price)) {
+              const pricesList = coinData.sparkline_in_7d.price;
+              const intervalMs = (7 * 24 * 60 * 60 * 1000) / Math.max(1, pricesList.length);
+              
+              klines[sym] = pricesList.map((price, idx) => {
+                const time = now - (pricesList.length - 1 - idx) * intervalMs;
+                return {
+                  time: time,
+                  close: price
+                };
+              });
+            }
+          }
+        }
+      }
+
+      return { change24h, change7d, klines };
+    } catch (error) {
+      logger.error('❌ Error fetching CoinGecko batch markets stats:', error.message);
+      return { change24h: {}, change7d: {}, klines: {} };
     }
   }
 }

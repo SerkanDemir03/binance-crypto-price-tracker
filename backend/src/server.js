@@ -4,7 +4,8 @@ const schedulerService = require('./services/schedulerService');
 const PriceService = require('./services/priceService');
 const FiatExchangeRateService = require('./services/fiatExchangeRateService');
 const cryptoController = require('./controllers/crypto.controller');
-const { UPDATE_INTERVAL, CRYPTO_SYMBOLS } = require('./config/constants');
+const { UPDATE_INTERVAL, CRYPTO_SYMBOLS, DEFAULT_API_PROVIDER } = require('./config/constants');
+const logger = require('./utils/logger');
 
 const PORT = process.env.PORT || 5000;
 
@@ -14,117 +15,87 @@ let priceService = null;
 // Make priceService globally accessible
 global.priceService = null;
 
-// Server'ı başlat
+httpServer.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    logger.error(`Port ${PORT} zaten kullanımda. .env ile farklı PORT tanımlayın (örn. PORT=5001).`);
+    process.exit(1);
+  }
+  logger.error('Sunucu hatası:', err.message);
+  process.exit(1);
+});
+
 httpServer.listen(PORT, async () => {
-  console.log(`🚀 Server is running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`⏰ Auto-update interval: ${UPDATE_INTERVAL}`);
-  
-  // Initialize Price Service with Socket.io (non-blocking)
+  logger.info(`Server running on port ${PORT}. Env: ${process.env.NODE_ENV || 'development'}. Cron: ${UPDATE_INTERVAL}`);
+  // Binance kısıtlı bölgelerde: SKIP_BINANCE_WEBSOCKET=true veya DEFAULT_API_PROVIDER=coingecko ile WebSocket devre dışı
+  const explicitSkip = process.env.SKIP_BINANCE_WEBSOCKET === 'true' || process.env.SKIP_BINANCE_WEBSOCKET === '1';
+  const useCoinGeckoDefault = (DEFAULT_API_PROVIDER || '').toLowerCase() === 'coingecko';
+  const skipBinanceWs = explicitSkip || useCoinGeckoDefault;
+
   try {
-    console.log(`📡 Initializing Binance WebSocket service...`);
     priceService = new PriceService(io);
-    global.priceService = priceService; // Make globally accessible
-    
-    // Wait a bit for database to be ready, then initialize WebSocket
-    // Use setImmediate to ensure this doesn't block server startup
+    global.priceService = priceService;
+
     setImmediate(async () => {
       try {
         const databaseService = require('./services/databaseService');
         await databaseService.createTable();
-        console.log(`✅ Database tables ready`);
-        
-        // Initialize WebSocket connection (non-blocking, won't crash server if it fails)
-        priceService.initialize(CRYPTO_SYMBOLS).catch(err => {
-          console.error('⚠️ WebSocket initialization failed, but server continues:', err.message);
-        });
-        
-        // Also do initial price fetch (non-blocking)
-        schedulerService.fetchAndSavePrices().catch(err => {
-          console.error('⚠️ Initial price fetch failed, but server continues:', err.message);
-        });
+        logger.info('Database tables ready');
 
-        // Initialize Fiat Exchange Rate Service
+        if (skipBinanceWs) {
+          if (useCoinGeckoDefault && !explicitSkip) {
+            logger.info('Binance WebSocket atlandı (DEFAULT_API_PROVIDER=coingecko). Fiyatlar CoinGecko ile güncellenir.');
+          } else {
+            logger.info('Binance WebSocket devre dışı (SKIP_BINANCE_WEBSOCKET). Dashboard "Güncelle" ile CoinGecko kullanın.');
+          }
+        } else {
+          priceService.initialize(CRYPTO_SYMBOLS).catch((err) => logger.warn('WebSocket init failed:', err.message));
+        }
+
+        schedulerService.fetchAndSavePrices().catch((err) => logger.warn('Initial price fetch failed:', err.message));
+
         const fiatExchangeRateService = new FiatExchangeRateService(io);
         cryptoController.setFiatExchangeRateService(fiatExchangeRateService);
-        
-        // Initial fiat rates update - await ile yap (veritabanına veri yüklenmesi için)
-        // Rate limit koruması için 5 saniye bekle
+
         setTimeout(async () => {
           try {
-            console.log('🔄 Initial fiat exchange rates update başlatılıyor...');
             await fiatExchangeRateService.updateAllExchangeRates();
-            console.log('✅ Initial fiat exchange rates update tamamlandı');
+            logger.info('Fiat exchange rates updated');
           } catch (err) {
-            console.error('⚠️ Initial fiat rates update failed, but server continues:', err.message);
-            // Hata olsa bile servis çalışmaya devam eder, getExchangeRate fallback kullanır
+            logger.warn('Fiat rates update failed:', err.message);
           }
-        }, 5000); // 5 saniye bekle (rate limit koruması)
+        }, 5000);
 
-        // Schedule fiat rates update every hour (fiat kurları çok sık değişmez)
         const cron = require('node-cron');
         cron.schedule('0 * * * *', async () => {
           try {
             await fiatExchangeRateService.updateAllExchangeRates();
-          } catch (error) {
-            console.error('⚠️ Scheduled fiat rates update failed:', error.message);
+          } catch (e) {
+            logger.warn('Scheduled fiat rates update failed:', e.message);
           }
-        }, {
-          scheduled: true,
-          timezone: 'Europe/Istanbul'
-        });
-        
-        console.log(`✅ Fiat exchange rate service initialized (updates every hour)`);
+        }, { scheduled: true, timezone: 'Europe/Istanbul' });
       } catch (error) {
-        console.error('⚠️ Error initializing services (server continues):', error.message);
-        console.error('Full error:', error);
+        logger.error('Error initializing services:', error.message);
       }
     });
-    
-    console.log(`ℹ️ Real-time price streaming via WebSocket enabled (initializing in background...)`);
+
+    if (!skipBinanceWs) logger.info('WebSocket initializing in background');
+    logger.info('Server ready', PORT);
   } catch (error) {
-    console.error('⚠️ Error creating Price Service (server continues):', error.message);
-    console.error('Full error:', error);
-    // Don't exit - server should continue even if WebSocket fails
+    logger.error('Price Service creation failed:', error.message);
   }
-  
-  console.log(`✅ Server is ready and listening on port ${PORT}`);
-  console.log(`💡 Note: WebSocket connection is being established in the background`);
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('⚠️ SIGTERM received, shutting down gracefully...');
-  if (priceService) {
-    priceService.disconnect();
-  }
+const shutdown = () => {
+  logger.warn('Shutting down gracefully');
+  if (priceService) priceService.disconnect();
   httpServer.close(() => {
-    console.log('✅ Server closed');
+    logger.info('Server closed');
     process.exit(0);
   });
-});
+};
 
-process.on('SIGINT', () => {
-  console.log('⚠️ SIGINT received, shutting down gracefully...');
-  if (priceService) {
-    priceService.disconnect();
-  }
-  httpServer.close(() => {
-    console.log('✅ Server closed');
-    process.exit(0);
-  });
-});
-
-// Unhandled error handling
-process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
-  console.error('⚠️ Server çalışmaya devam edecek...');
-  // process.exit(1) yerine sadece log yap
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-  console.error('⚠️ Server çalışmaya devam edecek...');
-  // process.exit(1) yerine sadece log yap
-});
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+process.on('uncaughtException', (error) => logger.error('Uncaught Exception:', error));
+process.on('unhandledRejection', (reason, promise) => logger.error('Unhandled Rejection', promise, reason));
 

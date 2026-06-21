@@ -6,38 +6,24 @@ const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
+const { CORS_ORIGIN } = require('./config/constants');
+const logger = require('./utils/logger');
 
-// Middleware imports
 const errorHandler = require('./middleware/errorHandler');
 const notFound = require('./middleware/notFound');
-
-// Route imports
 const apiRoutes = require('./routes');
 
 const app = express();
-
-// Create HTTP server for Socket.io
 const httpServer = createServer(app);
 
-// Initialize Socket.io
 const io = new Server(httpServer, {
-  cors: {
-    origin: process.env.CORS_ORIGIN || ['http://localhost:3000', 'http://localhost:3001'],
-    methods: ['GET', 'POST'],
-    credentials: true
-  },
+  cors: { origin: CORS_ORIGIN, methods: ['GET', 'POST'], credentials: true },
   transports: ['websocket', 'polling']
 });
 
-// Make io available globally
 app.set('io', io);
-
-// Security Middleware
 app.use(helmet());
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || ['http://localhost:3000', 'http://localhost:3001'],
-  credentials: true
-}));
+app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 
 // Rate limiting - Genel API limiti
 const limiter = rateLimit({
@@ -77,24 +63,12 @@ app.use('/api', apiRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
-// Socket.io connection handling
 io.on('connection', (socket) => {
-  console.log(`✅ Client connected: ${socket.id}`);
-
-  // Send current status on connection
-  socket.emit('connected', {
-    message: 'Connected to real-time price stream',
-    timestamp: new Date().toISOString()
-  });
-
-  // Handle client disconnection
-  socket.on('disconnect', () => {
-    console.log(`❌ Client disconnected: ${socket.id}`);
-  });
-
-  // Handle subscription requests
+  logger.info('Client connected', socket.id);
+  socket.emit('connected', { message: 'Connected to real-time price stream', timestamp: new Date().toISOString() });
+  socket.on('disconnect', () => logger.info('Client disconnected', socket.id));
   socket.on('subscribe-symbols', (symbols) => {
-    console.log(`📊 Client ${socket.id} subscribed to symbols:`, symbols);
+    logger.debug('Client subscribed to symbols', socket.id, symbols);
     socket.emit('subscription-confirmed', { symbols });
   });
 });

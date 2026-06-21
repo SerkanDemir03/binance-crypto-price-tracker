@@ -3,6 +3,50 @@ const databaseService = require('./databaseService');
 const logger = require('../utils/logger');
 
 /**
+ * Automatically translates English text to Turkish using Google Translate API
+ * @param {string} text - English text to translate
+ * @returns {Promise<string>} Translated Turkish text or original text if failed
+ */
+async function translateToTurkish(text) {
+  if (!text || typeof text !== 'string') return '';
+  try {
+    // Split by paragraphs to respect potential GET URL limitations
+    const paragraphs = text.split('\n');
+    const translatedParagraphs = [];
+    
+    for (const paragraph of paragraphs) {
+      if (!paragraph.trim()) {
+        translatedParagraphs.push('');
+        continue;
+      }
+      
+      const response = await axios.get('https://translate.googleapis.com/translate_a/single', {
+        params: {
+          client: 'gtx',
+          sl: 'en',
+          tl: 'tr',
+          dt: 't',
+          q: paragraph
+        },
+        timeout: 8000
+      });
+      
+      if (response.data && response.data[0]) {
+        const translatedPart = response.data[0].map(item => item[0]).join('');
+        translatedParagraphs.push(translatedPart);
+      } else {
+        translatedParagraphs.push(paragraph);
+      }
+    }
+    
+    return translatedParagraphs.join('\n');
+  } catch (error) {
+    logger.warn('Google Translate API error (using original text):', error.message);
+    return text;
+  }
+}
+
+/**
  * Metadata Service for CoinGecko API
  * Handles static data (name, logo, description, market cap) with 24-hour caching
  * Uses PostgreSQL to cache metadata and only fetches from API if data is missing or stale
@@ -29,6 +73,24 @@ class MetadataService {
       const cachedMetadata = await databaseService.getMetadata(normalizedSymbol);
       
       if (cachedMetadata && this.isCacheValid(cachedMetadata.updated_at)) {
+        // If cached metadata exists but has no Turkish translation, translate it on-the-fly!
+        if (cachedMetadata.description && !cachedMetadata.description_tr) {
+          logger.info(`🔄 Cached metadata for ${normalizedSymbol} has no Turkish translation. Translating on-the-fly...`);
+          try {
+            const translatedDescription = await translateToTurkish(cachedMetadata.description);
+            cachedMetadata.description_tr = translatedDescription;
+            
+            // Save updated metadata to database
+            const formatted = this.formatMetadata(cachedMetadata);
+            await databaseService.saveMetadata(normalizedSymbol, formatted);
+            
+            logger.info(`✅ On-the-fly translation saved for ${normalizedSymbol}`);
+            return formatted;
+          } catch (transError) {
+            logger.warn(`⚠️ On-the-fly translation failed for ${normalizedSymbol}:`, transError.message);
+          }
+        }
+
         logger.debug(`✅ Using cached metadata for ${normalizedSymbol} from database`);
         return this.formatMetadata(cachedMetadata);
       }
@@ -52,6 +114,18 @@ class MetadataService {
       try {
         const staleMetadata = await databaseService.getMetadata(symbol.toUpperCase().replace('USDT', ''));
         if (staleMetadata) {
+          if (staleMetadata.description && !staleMetadata.description_tr) {
+            logger.info(`🔄 Stale metadata for ${symbol} has no Turkish translation. Translating...`);
+            try {
+              const translatedDescription = await translateToTurkish(staleMetadata.description);
+              staleMetadata.description_tr = translatedDescription;
+              const formatted = this.formatMetadata(staleMetadata);
+              await databaseService.saveMetadata(symbol.toUpperCase().replace('USDT', ''), formatted);
+              return formatted;
+            } catch (transError) {
+              logger.warn(`⚠️ Stale on-the-fly translation failed:`, transError.message);
+            }
+          }
           logger.warn(`⚠️ Using stale metadata for ${symbol} due to API error`);
           return this.formatMetadata(staleMetadata);
         }
@@ -86,7 +160,7 @@ class MetadataService {
       // Using direct API call instead of ccxt for more control
       const response = await axios.get(`https://api.coingecko.com/api/v3/coins/${coinIdToUse}`, {
         params: {
-          localization: false,
+          localization: true,
           tickers: false,
           market_data: true,
           community_data: false,
@@ -101,13 +175,24 @@ class MetadataService {
 
       if (response.data) {
         const coinData = response.data;
+        const enDescription = coinData.description?.en || '';
+        let trDescription = coinData.description?.tr || '';
+
+        // If Turkish description is missing or identical to the English description, automatically translate it!
+        if (!trDescription.trim() || trDescription === enDescription) {
+          if (enDescription.trim()) {
+            logger.info(`Translating description for ${symbol} to Turkish automatically...`);
+            trDescription = await translateToTurkish(enDescription);
+          }
+        }
         
         return {
           symbol: symbol.toUpperCase(),
           coinId: coinIdToUse,
           name: coinData.name || symbol,
           logoUrl: coinData.image?.large || coinData.image?.small || coinData.image?.thumb || '',
-          description: coinData.description?.en || '',
+          description: enDescription,
+          description_tr: trDescription || enDescription,
           marketCap: coinData.market_data?.market_cap?.usd || 0,
           marketCapRank: coinData.market_cap_rank || null,
           homepage: coinData.links?.homepage?.[0] || '',
@@ -205,6 +290,7 @@ class MetadataService {
       name: dbRecord.name,
       logoUrl: dbRecord.logo_url,
       description: dbRecord.description,
+      description_tr: dbRecord.description_tr || '',
       marketCap: parseFloat(dbRecord.market_cap || 0),
       marketCapRank: dbRecord.market_cap_rank,
       homepage: dbRecord.homepage,

@@ -4,19 +4,93 @@ const cacheService = require('./cacheService');
 
 class NewsService {
   constructor() {
-    // Free crypto news APIs
+    // Free crypto news APIs + RSS yedek
     this.newsSources = [
-      {
-        name: 'CryptoCompare',
-        url: 'https://min-api.cryptocompare.com/data/v2/news/',
-        enabled: true
-      },
-      {
-        name: 'CoinGecko',
-        url: 'https://api.coingecko.com/api/v3/news',
-        enabled: true
-      }
+      { name: 'CryptoCompare', url: 'https://min-api.cryptocompare.com/data/v2/news/', enabled: true },
+      { name: 'CoinGecko', url: 'https://api.coingecko.com/api/v3/news', enabled: true },
+      { name: 'CoinDesk RSS', url: 'https://www.coindesk.com/arc/outboundfeeds/rss/', enabled: true }
     ];
+  }
+
+  /**
+   * RSS feed'den haber çeker (CoinDesk - API key gerektirmez, yedek kaynak)
+   */
+  async getRssNews(limit = 20) {
+    try {
+      const cacheKey = cacheService.generateKey('news', 'rss-coindesk', limit);
+      const cached = cacheService.get(cacheKey);
+      if (cached) {
+        logger.info('✅ RSS (CoinDesk) haberleri cache\'den alındı');
+        return cached;
+      }
+
+      const response = await axios.get('https://www.coindesk.com/arc/outboundfeeds/rss/', {
+        timeout: 10000,
+        responseType: 'text',
+        headers: { 'Accept': 'application/rss+xml, application/xml, text/xml' }
+      });
+
+      if (response.status !== 200 || typeof response.data !== 'string') {
+        return [];
+      }
+
+      const xml = response.data;
+      const news = [];
+      const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+      const stripCdata = (s) => (s || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, '$1').trim();
+      let match;
+      let count = 0;
+
+      while ((match = itemRegex.exec(xml)) !== null && count < limit) {
+        const block = match[1];
+        const titleMatch = block.match(/<title>([\s\S]*?)<\/title>/i);
+        const linkMatch = block.match(/<link>([^<]*)<\/link>/i);
+        const pubDateMatch = block.match(/<pubDate>([^<]*)<\/pubDate>/i);
+        const descMatch = block.match(/<description>([\s\S]*?)<\/description>/i);
+        const guidMatch = block.match(/<guid[^>]*>([^<]*)<\/guid>/i);
+
+        // Extract image URL from enclosure, media:content or standard img tag
+        const mediaMatch = block.match(/<media:content[^>]*url="([^"]*)"/i) || 
+                           block.match(/<enclosure[^>]*url="([^"]*)"/i) ||
+                           block.match(/<img[^>]*src="([^"]*)"/i);
+        const imageUrl = mediaMatch ? mediaMatch[1] : null;
+
+        const title = stripCdata(titleMatch ? titleMatch[1] : '');
+        if (!title) continue;
+
+        const link = linkMatch ? linkMatch[1].trim() : '';
+        const pubDate = pubDateMatch ? pubDateMatch[1].trim() : '';
+        const description = stripCdata(descMatch ? descMatch[1] : '');
+        const guid = guidMatch ? guidMatch[1].trim() : `rss-${Date.now()}-${count}`;
+
+        let publishedAt = new Date().toISOString();
+        try {
+          if (pubDate) publishedAt = new Date(pubDate).toISOString();
+        } catch (_) {}
+
+        news.push({
+          id: guid,
+          title,
+          body: description,
+          description,
+          url: link,
+          source: 'CoinDesk',
+          imageUrl,
+          publishedAt,
+          tags: []
+        });
+        count++;
+      }
+
+      if (news.length > 0) {
+        cacheService.set(cacheKey, news, 10 * 60 * 1000);
+        logger.info(`✅ ${news.length} haber RSS (CoinDesk) üzerinden alındı`);
+      }
+      return news;
+    } catch (error) {
+      logger.error('Error fetching RSS news:', error.message || error);
+      return [];
+    }
   }
 
   /**
@@ -49,7 +123,7 @@ class NewsService {
             body: item.body || '',
             url: item.url || '',
             source: item.source || 'CryptoCompare',
-            imageUrl: item.imageurl || null,
+            imageUrl: item.imageurl ? (item.imageurl.startsWith('/') ? `https://www.cryptocompare.com${item.imageurl}` : item.imageurl) : null,
             publishedAt: item.published_on 
               ? new Date(item.published_on * 1000).toISOString()
               : new Date().toISOString(),
@@ -130,21 +204,21 @@ class NewsService {
    */
   async getAllNews(limit = 30) {
     try {
-      // Promise.allSettled kullan - bir API başarısız olsa bile diğeri çalışsın
+      const perSource = Math.ceil(limit / 3);
       const results = await Promise.allSettled([
-        this.getCryptoCompareNews(Math.ceil(limit / 2)),
-        this.getCoinGeckoNews(Math.ceil(limit / 2))
+        this.getCryptoCompareNews(perSource),
+        this.getCoinGeckoNews(perSource),
+        this.getRssNews(perSource)
       ]);
 
-      // Başarılı sonuçları topla
       const allNews = [];
-      
+      const sourceNames = ['CryptoCompare', 'CoinGecko', 'CoinDesk RSS'];
+
       results.forEach((result, index) => {
         if (result.status === 'fulfilled' && Array.isArray(result.value)) {
           allNews.push(...result.value);
         } else {
-          const sourceName = index === 0 ? 'CryptoCompare' : 'CoinGecko';
-          logger.warn(`⚠️ ${sourceName} haberleri alınamadı:`, result.reason?.message || 'Bilinmeyen hata');
+          logger.warn(`⚠️ ${sourceNames[index]} haberleri alınamadı:`, result.reason?.message || 'Bilinmeyen hata');
         }
       });
 

@@ -3,7 +3,6 @@ import { QueryClient, QueryClientProvider } from 'react-query'
 import { Toaster } from 'react-hot-toast'
 import { ThemeProvider } from './contexts/ThemeContext'
 import Layout from './components/Layout/Layout'
-import Chatbot from './components/Chatbot/Chatbot'
 import DashboardPage from './pages/Dashboard/DashboardPage'
 import CryptoDetailPage from './pages/CryptoDetail/CryptoDetailPage'
 import DatabaseManagementPage from './pages/Database/DatabaseManagementPage'
@@ -41,7 +40,6 @@ function App() {
           </Routes>
         </Router>
         <Toaster position="top-right" />
-        <Chatbot />
       </QueryClientProvider>
     </ThemeProvider>
   )

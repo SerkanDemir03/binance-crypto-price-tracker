@@ -1,6 +1,8 @@
 const cron = require('node-cron');
 const binanceService = require('./binanceService');
+const coingeckoService = require('./coingeckoService');
 const databaseService = require('./databaseService');
+const { DEFAULT_API_PROVIDER } = require('../config/constants');
 const logger = require('../utils/logger');
 
 class SchedulerService {
@@ -70,29 +72,59 @@ class SchedulerService {
   }
 
   /**
-   * Binance API'den fiyatları çekip veritabanına kaydeder
-   * Bu fonksiyon hem scheduler hem de manuel güncelleme için kullanılır
+   * API'den fiyatları çekip veritabanına kaydeder.
+   * DEFAULT_API_PROVIDER (binance/coingecko) kullanılır; başarısız olursa otomatik diğer API denenir.
+   * Binance IP engeli / rate limit durumunda CoinGecko ile çalışmaya devam eder.
    */
   async fetchAndSavePrices() {
+    const provider = DEFAULT_API_PROVIDER || 'coingecko';
+    let prices = [];
+    let usedProvider = provider;
+
     try {
-      logger.info('🔄 Fiyatlar güncelleniyor...');
-      
-      // Binance API'den fiyatları çek
-      const prices = await binanceService.getAllPrices();
-      
+      logger.info(`🔄 Fiyatlar güncelleniyor (önce ${provider})...`);
+
+      if (provider === 'coingecko') {
+        try {
+          prices = await coingeckoService.getAllPrices();
+          usedProvider = 'coingecko';
+        } catch (err) {
+          logger.warn(`⚠️ CoinGecko başarısız: ${err.message}. Binance deneniyor...`);
+          try {
+            prices = await binanceService.getAllPrices(2);
+            usedProvider = 'binance';
+          } catch (binanceErr) {
+            logger.error('❌ CoinGecko ve Binance ikisi de başarısız:', binanceErr.message);
+            throw binanceErr;
+          }
+        }
+      } else {
+        try {
+          prices = await binanceService.getAllPrices(2);
+          usedProvider = 'binance';
+        } catch (err) {
+          logger.warn(`⚠️ Binance başarısız (IP engeli/rate limit olabilir): ${err.message}. CoinGecko deneniyor...`);
+          try {
+            prices = await coingeckoService.getAllPrices();
+            usedProvider = 'coingecko';
+          } catch (cgErr) {
+            logger.error('❌ Binance ve CoinGecko ikisi de başarısız:', cgErr.message);
+            throw cgErr;
+          }
+        }
+      }
+
       if (prices.length === 0) {
         logger.warn('⚠️ Fiyat verisi alınamadı');
         return;
       }
-      
-      // Veritabanına kaydet
+
       await databaseService.saveAllPrices(prices);
-      
-      logger.info(`✅ ${prices.length} kripto para fiyatı başarıyla güncellendi`);
+      logger.info(`✅ ${prices.length} kripto para fiyatı ${usedProvider} ile güncellendi`);
       return prices;
     } catch (error) {
-      logger.error('❌ Fiyatlar güncellenirken hata oluştu:', error.message);
-      throw error; // Hata durumunda yukarı fırlat
+      logger.error('❌ Fiyatlar güncellenirken hata:', error.message);
+      throw error;
     }
   }
 

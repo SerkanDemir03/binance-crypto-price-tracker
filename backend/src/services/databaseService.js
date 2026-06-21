@@ -64,6 +64,7 @@ class DatabaseService {
           name VARCHAR(200),
           logo_url TEXT,
           description TEXT,
+          description_tr TEXT,
           market_cap NUMERIC,
           market_cap_rank INTEGER,
           homepage TEXT,
@@ -80,6 +81,13 @@ class DatabaseService {
       `;
 
       await pool.query(createQuery);
+
+      // Add description_tr column dynamically if it doesn't exist (for existing databases)
+      try {
+        await pool.query(`ALTER TABLE coin_metadata ADD COLUMN IF NOT EXISTS description_tr TEXT;`);
+      } catch (alterError) {
+        logger.warn(`coin_metadata'ya description_tr sütunu eklenirken hata (devam ediliyor):`, alterError.message);
+      }
       
       // Create indexes for faster queries
       try {
@@ -784,18 +792,19 @@ class DatabaseService {
 
       const query = `
         INSERT INTO coin_metadata (
-          symbol, coin_id, name, logo_url, description, market_cap,
+          symbol, coin_id, name, logo_url, description, description_tr, market_cap,
           market_cap_rank, homepage, whitepaper, categories,
           current_price, price_change_24h, circulating_supply,
           total_supply, max_supply, updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
         ON CONFLICT (symbol)
         DO UPDATE SET
           coin_id = EXCLUDED.coin_id,
           name = EXCLUDED.name,
           logo_url = EXCLUDED.logo_url,
           description = EXCLUDED.description,
+          description_tr = EXCLUDED.description_tr,
           market_cap = EXCLUDED.market_cap,
           market_cap_rank = EXCLUDED.market_cap_rank,
           homepage = EXCLUDED.homepage,
@@ -816,6 +825,7 @@ class DatabaseService {
         metadata.name || symbol,
         metadata.logoUrl || '',
         metadata.description || '',
+        metadata.description_tr || '',
         metadata.marketCap || 0,
         metadata.marketCapRank || null,
         metadata.homepage || '',

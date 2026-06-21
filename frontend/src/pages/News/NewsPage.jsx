@@ -2,7 +2,91 @@ import { useState } from 'react'
 import { useQuery } from 'react-query'
 import { cryptoAPI } from '../../services/api'
 import LoadingSpinner from '../../components/Common/LoadingSpinner'
-import { Newspaper, ExternalLink, Calendar, Search, RefreshCw, AlertCircle } from 'lucide-react'
+import { Newspaper, ExternalLink, Calendar, Search, AlertCircle } from 'lucide-react'
+
+const getFallbackGradient = (title) => {
+  const gradients = [
+    'from-indigo-500 to-purple-600 dark:from-indigo-600 dark:to-purple-800',
+    'from-blue-500 to-cyan-600 dark:from-blue-600 dark:to-cyan-800',
+    'from-emerald-500 to-teal-600 dark:from-emerald-600 dark:to-teal-800',
+    'from-orange-500 to-amber-600 dark:from-orange-600 dark:to-amber-800',
+    'from-pink-500 to-rose-600 dark:from-pink-600 dark:to-rose-800',
+  ]
+  const charCodeSum = (title || '').split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
+  return gradients[charCodeSum % gradients.length]
+}
+
+const getThematicPlaceholder = (title) => {
+  const t = (title || '').toLowerCase()
+  if (t.includes('bitcoin') || t.includes('btc')) {
+    return 'https://images.unsplash.com/photo-1516245834210-c4c142787335?auto=format&fit=crop&q=80&w=300'
+  }
+  if (t.includes('ethereum') || t.includes('eth')) {
+    return 'https://images.unsplash.com/photo-1622790694515-617f9b8aa751?auto=format&fit=crop&q=80&w=300'
+  }
+  if (t.includes('solana') || t.includes('sol')) {
+    return 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&q=80&w=300'
+  }
+  if (t.includes('doge') || t.includes('shib') || t.includes('meme')) {
+    return 'https://images.unsplash.com/photo-1621416894569-0f39ed31d247?auto=format&fit=crop&q=80&w=300'
+  }
+  if (t.includes('cardano') || t.includes('ada')) {
+    return 'https://images.unsplash.com/photo-1639762681057-408e52192e55?auto=format&fit=crop&q=80&w=300'
+  }
+  if (t.includes('ripple') || t.includes('xrp')) {
+    return 'https://images.unsplash.com/photo-1622630998477-20aa696ecb05?auto=format&fit=crop&q=80&w=300'
+  }
+  if (t.includes('market') || t.includes('price') || t.includes('bull') || t.includes('bear') || t.includes('trillion') || t.includes('billion') || t.includes('chart') || t.includes('growth')) {
+    return 'https://images.unsplash.com/photo-1642790106117-e829e14a795f?auto=format&fit=crop&q=80&w=300'
+  }
+  if (t.includes('ai ') || t.includes('artificial intelligence') || t.includes('quantum') || t.includes('tech') || t.includes('sec') || t.includes('regulation') || t.includes('security')) {
+    return 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=300'
+  }
+  // Default general cryptocurrency artwork
+  return 'https://images.unsplash.com/photo-1621761191319-c6fb62004040?auto=format&fit=crop&q=80&w=300'
+}
+
+const NewsImage = ({ imageUrl, title, source }) => {
+  const [imageState, setImageState] = useState('primary') // 'primary', 'thematic', 'gradient'
+  
+  const thematicUrl = getThematicPlaceholder(title)
+
+  if (imageState === 'gradient') {
+    return (
+      <div className={`w-full md:w-40 h-40 rounded-lg bg-gradient-to-br ${getFallbackGradient(title)} flex flex-col items-center justify-center text-white p-4 shadow-inner relative overflow-hidden group flex-shrink-0`}>
+        <div className="absolute -right-6 -bottom-6 w-20 h-20 bg-white/10 rounded-full blur-xl group-hover:scale-150 transition-transform duration-500" />
+        <div className="absolute -left-6 -top-6 w-16 h-16 bg-white/10 rounded-full blur-lg group-hover:scale-125 transition-transform duration-500" />
+        
+        <div className="z-10 bg-white/15 backdrop-blur-md p-3 rounded-full border border-white/25 shadow-lg">
+          <Newspaper size={32} className="text-white drop-shadow-md" />
+        </div>
+        <span className="z-10 text-[10px] uppercase font-bold tracking-widest text-white/80 mt-3 text-center">
+          {source || 'KRİPTO'}
+        </span>
+      </div>
+    )
+  }
+
+  const currentSrc = (imageState === 'primary' && imageUrl) ? imageUrl : thematicUrl
+
+  return (
+    <div className="w-full md:w-40 h-40 flex-shrink-0 relative overflow-hidden rounded-lg shadow-md group">
+      <img
+        src={currentSrc}
+        alt={title || 'Haber görseli'}
+        className="w-full h-full object-cover rounded-lg transform group-hover:scale-105 transition-transform duration-500"
+        onError={() => {
+          if (imageState === 'primary' && imageUrl) {
+            setImageState('thematic')
+          } else {
+            setImageState('gradient')
+          }
+        }}
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+    </div>
+  )
+}
 
 const NewsPage = () => {
   const [searchCoin, setSearchCoin] = useState('')
@@ -58,24 +142,14 @@ const NewsPage = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Kripto Para & Borsa Haberleri</h1>
-            <p className="text-gray-600 dark:text-gray-400">En güncel kripto para ve borsa piyasası haberleri</p>
-            {newsCount > 0 && (
-              <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
-                {newsCount} haber gösteriliyor
-              </p>
-            )}
-          </div>
-          <button
-            onClick={() => refetch()}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <RefreshCw size={20} className={isLoading ? 'animate-spin' : ''} />
-            {isLoading ? 'Yükleniyor...' : 'Yenile'}
-          </button>
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Kripto Para & Borsa Haberleri</h1>
+          <p className="text-gray-600 dark:text-gray-400">En güncel kripto para ve borsa piyasası haberleri</p>
+          {newsCount > 0 && (
+            <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
+              {newsCount} haber gösteriliyor
+            </p>
+          )}
         </div>
 
         {/* Search */}
@@ -127,19 +201,8 @@ const NewsPage = () => {
                     key={item.id || `news-${Date.now()}-${Math.random()}`}
                     className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-gray-200 dark:border-gray-700"
                   >
-                    <div className="flex flex-col md:flex-row gap-4">
-                      {item.imageUrl && (
-                        <div className="flex-shrink-0">
-                          <img
-                            src={item.imageUrl}
-                            alt={item.title || 'Haber görseli'}
-                            className="w-full md:w-40 h-40 object-cover rounded-lg"
-                            onError={(e) => {
-                              e.target.style.display = 'none'
-                            }}
-                          />
-                        </div>
-                      )}
+                    <div className="flex flex-col md:flex-row gap-6 items-start">
+                      <NewsImage imageUrl={item.imageUrl} title={item.title} source={item.source} />
                       <div className="flex-1 min-w-0">
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3 line-clamp-2">
                           {item.title}

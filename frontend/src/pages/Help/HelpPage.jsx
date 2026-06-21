@@ -15,11 +15,6 @@ const HelpPage = () => {
             <strong>Serkan Crypto Tracker</strong>, kripto para fiyatlarını gerçek zamanlı olarak takip etmenizi sağlayan modern bir web uygulamasıdır. 
             Binance ve CoinGecko API'lerini kullanarak güncel fiyat bilgilerini sunar.
           </p>
-          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-            <p className="text-sm text-blue-800 dark:text-blue-200">
-              ⚠️ <strong>Önemli:</strong> Bu uygulama yatırım tavsiyesi niteliğinde değildir; bu sayede kullanıcı sorumluluğu konusunda şeffaflık sağlandı.
-            </p>
-          </div>
         </div>
       )
     },
@@ -222,7 +217,6 @@ const HelpPage = () => {
           <div className={`p-4 rounded-lg border-l-4 ${theme === 'dark' ? 'bg-gray-800 border-yellow-500' : 'bg-yellow-50 border-yellow-500'}`}>
             <h4 className="font-semibold mb-2">⚠️ Dikkat Edilmesi Gerekenler</h4>
             <ul className="list-disc list-inside space-y-1 text-sm text-gray-700 dark:text-gray-300">
-              <li>Bu uygulama yatırım tavsiyesi değildir</li>
               <li>Yatırım kararlarınızı kendi araştırmanıza dayandırın</li>
               <li>API rate limit'lerine dikkat edin</li>
               <li>Verilerin doğruluğunu kontrol edin</li>
@@ -323,7 +317,6 @@ const HelpPage = () => {
                 Yasal Uyarı
               </h3>
               <p className="text-sm text-red-700 dark:text-red-400">
-                Bu uygulama yatırım tavsiyesi niteliğinde değildir; bu sayede kullanıcı sorumluluğu konusunda şeffaflık sağlandı. 
                 Kripto para yatırımları yüksek risk içerir. Yatırım kararlarınızı kendi araştırmanıza dayandırın ve sadece kaybetmeyi göze alabileceğiniz parayı yatırın.
               </p>
             </div>

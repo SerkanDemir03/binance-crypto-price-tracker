@@ -28,10 +28,10 @@ symbols = [
 binance_api_url = "https://api.binance.com/api/v3/ticker/price"
 
 
-def create_table(cursor, table_name="tbl_binance2_staj"):
+def create_table(cursor, table_name="tbl_binance2"):
     """
     İstenilen tabloyu ve kolonları oluşturur.
-    Varsayılan tablo: tbl_binance2_staj
+    Varsayılan tablo: tbl_binance2
     Kolonlar: id (primary key), name, price, binancetime
     """
     create_query = f"""
@@ -64,7 +64,7 @@ try:
             istanbul_tz = pytz.timezone("Europe/Istanbul")
             now = datetime.now(istanbul_tz)
             cursor.execute("""
-                INSERT INTO tbl_binance2_staj (name, price, binancetime)
+                INSERT INTO tbl_binance2 (name, price, binancetime)
                 VALUES (%s, %s, %s);
             """, (name, price, now))
 

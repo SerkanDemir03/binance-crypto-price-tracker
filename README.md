@@ -169,7 +169,7 @@ DB_USER=postgres
 DB_PASSWORD=12345678
 
 BINANCE_API_URL=https://api.binance.com/api/v3/ticker/price
-TABLE_NAME=tbl_binance2_staj
+TABLE_NAME=tbl_binance2
 
 # Scheduler Configuration (Cron expression)
 # Şu anda otomatik güncelleme kapalı, sadece manuel güncelleme yapılıyor
@@ -271,11 +271,11 @@ Tarayıcınızda `http://localhost:3000` adresini açın.
 ### Veri Kaynakları
 - **Binance API** - Binance'de işlem gören kripto paralar için
 - **CoinGecko API** - Daha geniş coin yelpazesi için alternatif kaynak
-- **PostgreSQL** - Tüm fiyat verileri `tbl_binance2_staj` tablosunda saklanır
+- **PostgreSQL** - Tüm fiyat verileri `tbl_binance2` tablosunda saklanır
 
 ### Veritabanı Yapısı
 ```sql
-CREATE TABLE tbl_binance2_staj (
+CREATE TABLE tbl_binance2 (
   id SERIAL PRIMARY KEY,
   name VARCHAR(20),        -- Coin symbol (örn: BTCUSDT, DOGEUSDT)
   price NUMERIC,            -- Coin fiyatı

@@ -2,10 +2,10 @@
 
 ## 📊 Veritabanı Yapısı
 
-### Tablo: `tbl_binance2_staj`
+### Tablo: `tbl_binance2`
 ```sql
-CREATE TABLE tbl_binance2_staj (
-  id SERIAL PRIMARY KEY,
+CREATE TABLE tbl_binance2 (
+  id SERIAL PRIMARY KEY,   -- sequence: tbl_binance2_id_seq (nextval('tbl_binance2_id_seq'::regclass))
   name VARCHAR(20),        -- Coin symbol (örn: BTCUSDT, DOGEUSDT)
   price NUMERIC,            -- Coin fiyatı
   binancetime TIMESTAMP    -- Kayıt zamanı
@@ -33,7 +33,7 @@ Frontend → Backend: validateCoin(symbol, saveToDb=true)
 1. Tablo kontrolü (yoksa oluştur)
 2. API'den fiyat çek (CoinGecko)
 3. Veritabanına INSERT yap:
-   INSERT INTO tbl_binance2_staj (name, price, binancetime)
+   INSERT INTO tbl_binance2 (name, price, binancetime)
    VALUES ('DOGEUSDT', 0.149963, '2025-11-26 13:42:22')
 ```
 
@@ -77,7 +77,7 @@ Backend'de:
     "version": "PostgreSQL 14.x",
     "tableExists": true,
     "coinCount": 5,
-    "tableName": "tbl_binance2_staj",
+    "tableName": "tbl_binance2",
     "message": "Veritabanı aktif ve çalışıyor. 5 farklı coin takip ediliyor."
   }
 }

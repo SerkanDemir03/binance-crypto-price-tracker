@@ -1,294 +1,203 @@
 const WebSocket = require('ws');
 const databaseService = require('./databaseService');
 const logger = require('../utils/logger');
-const { CRYPTO_SYMBOLS, WEBSOCKET_SAVE_INTERVAL } = require('../config/constants');
+const {
+  CRYPTO_SYMBOLS,
+  WEBSOCKET_SAVE_INTERVAL,
+  WS_BINANCE_URL,
+  WS_CONNECT_TIMEOUT_MS,
+  WS_HEARTBEAT_INTERVAL_MS,
+  WS_RECONNECT_DELAY_MS,
+  WS_MAX_RECONNECT_ATTEMPTS
+} = require('../config/constants');
+
+const toBaseSymbol = (s) => (s || '').toLowerCase().replace(/usdt|usd/g, '');
 
 /**
  * Binance WebSocket Price Streaming Service
- * Real-time price updates via WebSocket (Hot Path)
+ * Tek bağlantı, throttle ile DB kaydı, tek batch emit.
  */
 class PriceService {
   constructor(io) {
-    this.io = io; // Socket.io instance for frontend communication
+    this.io = io;
     this.ws = null;
     this.symbols = new Set();
     this.isConnected = false;
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 10;
-    this.reconnectDelay = 5000; // 5 seconds
-    this.priceCache = new Map(); // In-memory cache for latest prices
-    this.lastSaveTime = new Map(); // Track last save time for each symbol (throttle)
-    this.saveInterval = WEBSOCKET_SAVE_INTERVAL; // Save to database interval (configurable, default: 60 seconds)
-    // Bu interval analiz için yeterli veri sağlar ve depolama sorunlarını önler
-    // Örnek: 1 dakika = günde 1440 kayıt/coin, 40 coin = günde ~57,600 kayıt
+    this.reconnectScheduled = false;
+    this.priceCache = new Map();
+    this.lastSaveTime = new Map();
+    this.saveInterval = WEBSOCKET_SAVE_INTERVAL;
+    this.heartbeatTimer = null;
+    this.connectTimeout = null;
   }
 
-  /**
-   * Initialize WebSocket connection to Binance
-   * @param {Array<string>} symbols - Array of symbols to subscribe (e.g., ['btcusdt', 'ethusdt'])
-   */
   async initialize(symbols = null) {
     try {
-      // Use provided symbols or default from constants
-      const symbolsToTrack = symbols || CRYPTO_SYMBOLS.map(s => s.toLowerCase().replace('usdt', ''));
-      
-      // Convert to lowercase and remove USDT suffix for Binance WebSocket
-      this.symbols = new Set(
-        symbolsToTrack.map(s => 
-          s.toLowerCase().replace('usdt', '').replace('usd', '')
-        )
-      );
-
-      logger.info(`📡 Initializing Binance WebSocket for ${this.symbols.size} symbols`);
-      
-      // Connect asynchronously, don't wait for it to complete
-      // This ensures server continues even if WebSocket fails
-      this.connect().catch(error => {
-        logger.error('❌ WebSocket connection failed, but server will continue:', error.message);
-        // Server will continue running even if WebSocket fails
-      });
-    } catch (error) {
-      logger.error('❌ Error initializing PriceService:', error);
-      // Don't throw error - let server continue
-      logger.warn('⚠️ PriceService initialization failed, but server will continue running');
+      const list = symbols || CRYPTO_SYMBOLS;
+      this.symbols = new Set(list.map((s) => toBaseSymbol(s)));
+      logger.info(`📡 Binance WebSocket: ${this.symbols.size} sembol`);
+      this.connect().catch((err) => logger.error('❌ WebSocket başlatılamadı:', err.message));
+    } catch (err) {
+      logger.error('❌ PriceService init:', err.message);
     }
   }
 
-  /**
-   * Connect to Binance WebSocket Stream
-   */
+  cleanup() {
+    if (this.connectTimeout) {
+      clearTimeout(this.connectTimeout);
+      this.connectTimeout = null;
+    }
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+    if (this.ws) {
+      this.ws.removeAllListeners();
+      if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
+        this.ws.close();
+      }
+      this.ws = null;
+    }
+    this.isConnected = false;
+  }
+
   async connect() {
+    this.cleanup();
     return new Promise((resolve, reject) => {
       try {
-        // Binance WebSocket URL for ticker stream
-        // Format: wss://stream.binance.com:9443/ws/!ticker@arr
-        // This streams all ticker updates, we'll filter by our symbols
-        const wsUrl = 'wss://stream.binance.com:9443/ws/!ticker@arr';
+        // Toggle stream URL between stream.binance.com and stream.binance.us on retry attempts
+        let targetWsUrl = WS_BINANCE_URL;
+        if (this.reconnectAttempts % 2 !== 0) {
+          targetWsUrl = WS_BINANCE_URL.replace('stream.binance.com', 'stream.binance.us');
+        }
         
-        logger.info(`🔌 Connecting to Binance WebSocket: ${wsUrl}`);
+        this.ws = new WebSocket(targetWsUrl);
 
-        this.ws = new WebSocket(wsUrl);
-
-        // Set timeout for connection
-        const connectionTimeout = setTimeout(() => {
+        this.connectTimeout = setTimeout(() => {
           if (!this.isConnected) {
-            logger.warn('⚠️ WebSocket connection timeout, will retry...');
-            this.handleReconnect();
+            logger.warn('⚠️ WebSocket bağlantı zaman aşımı');
+            this.cleanup();
+            this.scheduleReconnect();
             reject(new Error('WebSocket connection timeout'));
           }
-        }, 10000); // 10 second timeout
+        }, WS_CONNECT_TIMEOUT_MS);
 
         this.ws.on('open', () => {
-          clearTimeout(connectionTimeout);
-          logger.info('✅ Binance WebSocket connected successfully');
+          if (this.connectTimeout) clearTimeout(this.connectTimeout);
+          this.connectTimeout = null;
           this.isConnected = true;
           this.reconnectAttempts = 0;
-          resolve(); // Resolve promise when connected
+          this.reconnectScheduled = false;
+          this.heartbeatTimer = setInterval(() => {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.ping();
+          }, WS_HEARTBEAT_INTERVAL_MS);
+          logger.info('✅ Binance WebSocket bağlandı');
+          resolve();
         });
 
         this.ws.on('message', (data) => {
           try {
             const tickers = JSON.parse(data.toString());
             this.handlePriceUpdate(tickers);
-          } catch (error) {
-            logger.error('❌ Error parsing WebSocket message:', error);
+          } catch (e) {
+            logger.error('❌ WebSocket mesaj parse:', e.message);
           }
         });
 
-        this.ws.on('error', (error) => {
-          clearTimeout(connectionTimeout);
-          logger.error('❌ Binance WebSocket error:', error);
+        this.ws.on('error', () => {
+          if (this.connectTimeout) clearTimeout(this.connectTimeout);
           this.isConnected = false;
-          // Don't reject here - let it try to reconnect
-          // reject(error); // Commented out to allow reconnection
         });
 
         this.ws.on('close', () => {
-          clearTimeout(connectionTimeout);
-          logger.warn('⚠️ Binance WebSocket connection closed');
+          if (this.connectTimeout) clearTimeout(this.connectTimeout);
           this.isConnected = false;
-          this.handleReconnect();
+          this.cleanup();
+          if (!this.reconnectScheduled) this.scheduleReconnect();
         });
-
-        this.ws.on('pong', () => {
-          // Heartbeat response received
-          logger.debug('💓 WebSocket heartbeat pong received');
-        });
-
-        // Setup heartbeat to keep connection alive
-        this.setupHeartbeat();
-
-    } catch (error) {
-      logger.error('❌ Error connecting to Binance WebSocket:', error);
-      this.isConnected = false;
-      this.handleReconnect();
-      reject(error);
-    }
-  });
-  }
-
-  /**
-   * Setup heartbeat to keep WebSocket connection alive
-   */
-  setupHeartbeat() {
-    this.heartbeatInterval = setInterval(() => {
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.ws.ping();
-        logger.debug('💓 WebSocket heartbeat ping sent');
+      } catch (err) {
+        this.cleanup();
+        this.scheduleReconnect();
+        reject(err);
       }
-    }, 30000); // Every 30 seconds
+    });
   }
 
-  /**
-   * Handle price updates from WebSocket
-   * @param {Array} tickers - Array of ticker data from Binance
-   */
-  async handlePriceUpdate(tickers) {
-    if (!Array.isArray(tickers)) {
+  scheduleReconnect() {
+    if (this.reconnectScheduled || this.reconnectAttempts >= WS_MAX_RECONNECT_ATTEMPTS) {
+      if (this.reconnectAttempts >= WS_MAX_RECONNECT_ATTEMPTS) {
+        logger.warn(`⚠️ Binance WebSocket ${WS_MAX_RECONNECT_ATTEMPTS} denemeden sonra durduruldu. CoinGecko ile güncelleyebilirsiniz.`);
+      }
       return;
     }
-
-    const updates = [];
-    const now = new Date();
-
-    for (const ticker of tickers) {
-      try {
-        const symbol = ticker.s; // Symbol (e.g., 'BTCUSDT')
-        const price = parseFloat(ticker.c); // Current price
-        const priceChange = parseFloat(ticker.P); // 24h price change percentage
-        const volume = parseFloat(ticker.v); // 24h volume
-
-        // Check if we're tracking this symbol
-        const baseSymbol = symbol.toLowerCase().replace('usdt', '').replace('usd', '');
-        if (!this.symbols.has(baseSymbol)) {
-          continue;
-        }
-
-        // Update cache
-        this.priceCache.set(symbol, {
-          symbol,
-          price,
-          priceChange,
-          volume,
-          timestamp: now
-        });
-
-        // Save to database with throttle (her coin için 1 dakikada bir)
-        // Bu sayede:
-        // 1. Analiz için yeterli veri noktası sağlanır (dakikada 1 kayıt = günde 1440 kayıt)
-        // 2. Depolama sorunları önlenir (gereksiz kayıtlar yapılmaz)
-        // 3. Veritabanı performansı korunur
-        const lastSave = this.lastSaveTime.get(symbol);
-        const shouldSave = !lastSave || (now - lastSave) >= this.saveInterval;
-        
-        if (shouldSave) {
-          try {
-            await databaseService.savePrice(symbol, price);
-            this.lastSaveTime.set(symbol, now);
-            logger.debug(`💾 ${symbol} veritabanına kaydedildi (throttled: ${this.saveInterval/1000}s)`);
-          } catch (dbError) {
-            logger.warn(`⚠️ Failed to save ${symbol} to database:`, dbError.message);
-          }
-        } else {
-          // Throttle nedeniyle kaydedilmedi, sadece cache güncellendi
-          logger.debug(`⏭️ ${symbol} cache güncellendi (DB kaydı throttle nedeniyle atlandı)`);
-        }
-
-        updates.push({
-          symbol,
-          price,
-          priceChange,
-          volume,
-          timestamp: now.toISOString()
-        });
-
-      } catch (error) {
-        logger.error(`❌ Error processing ticker ${ticker.s}:`, error);
-      }
-    }
-
-    // Emit updates to frontend via Socket.io
-    if (updates.length > 0 && this.io) {
-      this.io.emit('price-update', {
-        type: 'batch',
-        updates,
-        timestamp: now.toISOString()
-      });
-
-      // Also emit individual updates for granular frontend handling
-      updates.forEach(update => {
-        this.io.emit('price-update-single', update);
-      });
-
-      logger.debug(`📊 Emitted ${updates.length} price updates to frontend`);
-    }
-  }
-
-  /**
-   * Handle reconnection logic
-   */
-  handleReconnect() {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      logger.error(`❌ Max reconnection attempts (${this.maxReconnectAttempts}) reached. Stopping reconnection.`);
-      return;
-    }
-
+    this.reconnectScheduled = true;
     this.reconnectAttempts++;
-    const delay = this.reconnectDelay * this.reconnectAttempts; // Exponential backoff
-
-    logger.info(`🔄 Reconnecting to Binance WebSocket in ${delay / 1000} seconds (Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
-
+    const delay = WS_RECONNECT_DELAY_MS * this.reconnectAttempts;
+    logger.info(`🔄 WebSocket yeniden bağlanıyor (${this.reconnectAttempts}/${WS_MAX_RECONNECT_ATTEMPTS}) ${delay / 1000}s sonra`);
     setTimeout(() => {
-      this.connect();
+      this.reconnectScheduled = false;
+      this.connect().catch(() => {});
     }, delay);
   }
 
-  /**
-   * Add a new symbol to track
-   * @param {string} symbol - Symbol to add (e.g., 'SOLUSDT')
-   */
+  async handlePriceUpdate(tickers) {
+    if (!Array.isArray(tickers)) return;
+    const now = new Date();
+    const updates = [];
+
+    for (const ticker of tickers) {
+      const symbol = ticker.s;
+      const base = toBaseSymbol(symbol);
+      if (!this.symbols.has(base)) continue;
+
+      const price = parseFloat(ticker.c);
+      const priceChange = parseFloat(ticker.P);
+      const volume = parseFloat(ticker.v);
+      this.priceCache.set(symbol, { symbol, price, priceChange, volume, timestamp: now });
+
+      const lastSave = this.lastSaveTime.get(symbol);
+      if (!lastSave || now - lastSave >= this.saveInterval) {
+        try {
+          await databaseService.savePrice(symbol, price);
+          this.lastSaveTime.set(symbol, now);
+        } catch (e) {
+          logger.warn(`⚠️ DB kayıt ${symbol}:`, e.message);
+        }
+      }
+      updates.push({ symbol, price, priceChange, volume, timestamp: now.toISOString() });
+    }
+
+    if (updates.length && this.io) {
+      this.io.emit('price-update', { type: 'batch', updates, timestamp: now.toISOString() });
+    }
+  }
+
   addSymbol(symbol) {
-    const baseSymbol = symbol.toLowerCase().replace('usdt', '').replace('usd', '');
-    if (!this.symbols.has(baseSymbol)) {
-      this.symbols.add(baseSymbol);
-      logger.info(`➕ Added ${symbol} to WebSocket tracking`);
+    const base = toBaseSymbol(symbol);
+    if (!this.symbols.has(base)) {
+      this.symbols.add(base);
+      logger.info(`➕ WebSocket: ${symbol} eklendi`);
     }
   }
 
-  /**
-   * Remove a symbol from tracking
-   * @param {string} symbol - Symbol to remove
-   */
   removeSymbol(symbol) {
-    const baseSymbol = symbol.toLowerCase().replace('usdt', '').replace('usd', '');
-    if (this.symbols.has(baseSymbol)) {
-      this.symbols.delete(baseSymbol);
-      this.priceCache.delete(symbol.toUpperCase());
-      logger.info(`➖ Removed ${symbol} from WebSocket tracking`);
+    const base = toBaseSymbol(symbol);
+    if (this.symbols.has(base)) {
+      this.symbols.delete(base);
+      this.priceCache.delete((symbol || '').toUpperCase());
+      logger.info(`➖ WebSocket: ${symbol} kaldırıldı`);
     }
   }
 
-  /**
-   * Get latest price from cache
-   * @param {string} symbol - Symbol to get price for
-   * @returns {Object|null} Latest price data or null
-   */
   getLatestPrice(symbol) {
-    return this.priceCache.get(symbol.toUpperCase()) || null;
+    return this.priceCache.get((symbol || '').toUpperCase()) || null;
   }
 
-  /**
-   * Get all cached prices
-   * @returns {Array} Array of all cached prices
-   */
   getAllCachedPrices() {
     return Array.from(this.priceCache.values());
   }
 
-  /**
-   * Get connection status
-   * @returns {Object} Connection status information
-   */
   getStatus() {
     return {
       isConnected: this.isConnected,
@@ -298,21 +207,10 @@ class PriceService {
     };
   }
 
-  /**
-   * Close WebSocket connection
-   */
   disconnect() {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-    }
-
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
-
-    this.isConnected = false;
-    logger.info('🔌 Binance WebSocket disconnected');
+    this.reconnectScheduled = true;
+    this.cleanup();
+    logger.info('🔌 Binance WebSocket kapatıldı');
   }
 }
 

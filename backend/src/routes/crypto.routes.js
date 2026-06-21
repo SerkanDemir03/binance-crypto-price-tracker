@@ -3,6 +3,7 @@ const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const cryptoController = require('../controllers/crypto.controller');
 const pool = require('../config/database');
+const { DEFAULT_API_PROVIDER } = require('../config/constants');
 
 // Fetch endpoint için özel rate limiter (API rate limit'lerini korumak için)
 // Her API provider için ayrı rate limit (IP + provider kombinasyonu)
@@ -21,8 +22,8 @@ const fetchLimiter = rateLimit({
              req.socket?.remoteAddress ||
              'unknown';
     
-    // Provider'ı al (query veya body'den)
-    const provider = req.query?.provider || req.body?.provider || 'binance';
+    // Provider'ı al (query veya body'den; varsayılan DEFAULT_API_PROVIDER - Binance kısıtlı bölgelerde coingecko)
+    const provider = req.query?.provider || req.body?.provider || DEFAULT_API_PROVIDER || 'coingecko';
     
     // Key oluştur
     const key = `${ip}-${provider}`;
@@ -38,7 +39,7 @@ const fetchLimiter = rateLimit({
     const retryAfter = 30; // Window süresi (30 saniye)
     const resetTime = new Date(Date.now() + windowMs);
     
-    const provider = req.query?.provider || req.body?.provider || 'binance';
+    const provider = req.query?.provider || req.body?.provider || DEFAULT_API_PROVIDER || 'coingecko';
     const ip = req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.connection?.remoteAddress || 'unknown';
     const key = `${ip}-${provider}`;
     
@@ -89,6 +90,10 @@ router.get('/health/db', async (req, res) => {
 // Binance API routes
 router.get('/prices', cryptoController.getAllPrices);
 router.get('/prices/:symbol', cryptoController.getPriceBySymbol);
+router.get('/klines/batch', cryptoController.getKlinesBatch);
+router.get('/klines/:symbol', cryptoController.getKlines);
+router.get('/stats/24h', cryptoController.get24hStatsBatch);
+router.get('/stats/7d', cryptoController.get7dStatsBatch);
 router.get('/stats/:symbol', cryptoController.get24hStats);
 
 // Database routes

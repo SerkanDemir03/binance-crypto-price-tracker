@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { TrendingUp, Sparkles, Database, Moon, Sun, FileText, Calculator, Newspaper, HelpCircle } from 'lucide-react'
 import { useTheme } from '../../contexts/ThemeContext'
+import CryptoLogo from '../Common/CryptoLogo'
 
 const Navbar = () => {
   const { theme, toggleTheme } = useTheme()
@@ -10,12 +11,7 @@ const Navbar = () => {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <Link to="/" className="flex items-center space-x-3 group">
-            <div className="relative">
-              <div className="absolute inset-0 bg-white rounded-lg blur-md opacity-30 group-hover:opacity-50 transition-opacity"></div>
-              <div className="relative bg-white/20 backdrop-blur-sm rounded-lg p-2 group-hover:scale-110 transition-transform duration-300">
-                <TrendingUp className="w-6 h-6 text-white" />
-              </div>
-            </div>
+            <CryptoLogo size="sm" />
             <div>
               <span className="text-xl font-bold text-white flex items-center gap-2">
                 Serkan Crypto Tracker

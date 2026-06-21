@@ -11,7 +11,7 @@ const FiatExchangeRateService = require('../services/fiatExchangeRateService');
 const chatbotService = require('../services/chatbotService');
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
-const { DEFAULT_API_PROVIDER } = require('../config/constants');
+const { DEFAULT_API_PROVIDER, CRYPTO_SYMBOLS } = require('../config/constants');
 
 // Fiat exchange rate service instance (server.js'de initialize edilecek)
 let fiatExchangeRateService = null;
@@ -420,21 +420,161 @@ exports.getPriceHistory = asyncHandler(async (req, res) => {
 });
 
 /**
- * 24 saatlik istatistikleri getirir
+ * Binance klines (OHLCV) - grafik için gerçek mum verisi
+ * Binance erişilemezse (IP engeli vb.) 200 + null döner; frontend veritabanı grafiğine geçer
+ */
+exports.getKlines = asyncHandler(async (req, res) => {
+  const { symbol } = req.params;
+  const interval = req.query.interval || '1h';
+  const limit = parseInt(req.query.limit) || 500;
+  if (!symbol) throw new AppError('Symbol parametresi gerekli', 400);
+  try {
+    const data = await binanceService.getKlines(symbol, interval, limit);
+    return res.status(200).json({ status: 'success', data });
+  } catch (err) {
+    logger.warn('Binance klines erişilemedi (IP engeli olabilir):', err.message);
+    return res.status(200).json({ status: 'success', data: null });
+  }
+});
+
+/**
+ * Toplu klines (OHLCV) verisi çeker (Dashboard sparklines için ideal)
+ */
+exports.getKlinesBatch = asyncHandler(async (req, res) => {
+  const { customSymbols } = req.query;
+  const interval = req.query.interval || '4h';
+  const limit = parseInt(req.query.limit) || 42; // Varsayılan 7 gün
+  
+  let symbols = CRYPTO_SYMBOLS;
+  if (customSymbols && typeof customSymbols === 'string') {
+    symbols = customSymbols.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+  }
+  
+  try {
+    let data = await binanceService.getKlinesBatch(symbols, interval, limit);
+    
+    // Find symbols missing from Binance batch response (delisted or invalid symbols)
+    const missingSymbols = symbols.filter(sym => {
+      const s = sym.endsWith('USDT') ? sym : sym + 'USDT';
+      return !data || !data[s] || data[s].length === 0;
+    });
+
+    if (missingSymbols.length > 0) {
+      logger.info(`🔍 Klines missing for ${missingSymbols.length} symbols on Binance. Fetching fallback from CoinGecko...`);
+      try {
+        const cgStats = await coingeckoService.getMarketStatsBatch(missingSymbols);
+        if (cgStats && cgStats.klines) {
+          data = { ...data, ...cgStats.klines };
+        }
+      } catch (cgErr) {
+        logger.warn('⚠️ CoinGecko batch klines fallback failed:', cgErr.message);
+      }
+    }
+    
+    return res.status(200).json({ status: 'success', data });
+  } catch (err) {
+    logger.warn('Binance batch klines erişilemedi, CoinGecko fallback devreye giriyor:', err.message);
+    try {
+      const cgStats = await coingeckoService.getMarketStatsBatch(symbols);
+      return res.status(200).json({ status: 'success', data: cgStats.klines });
+    } catch (cgErr) {
+      return res.status(200).json({ status: 'success', data: {} });
+    }
+  }
+});
+
+/**
+ * 24 saatlik istatistikleri getirir (tek sembol). Binance erişilemezse 500 yerine boş döner.
  */
 exports.get24hStats = asyncHandler(async (req, res) => {
   const { symbol } = req.params;
-  
-  if (!symbol) {
-    throw new AppError('Symbol parametresi gerekli', 400);
+  if (!symbol) throw new AppError('Symbol parametresi gerekli', 400);
+  try {
+    const stats = await binanceService.get24hStats(symbol);
+    return res.status(200).json({ status: 'success', data: stats });
+  } catch (err) {
+    res.status(200).json({ status: 'success', data: null });
   }
-  
-  const stats = await binanceService.get24hStats(symbol);
-  
-  res.status(200).json({
-    status: 'success',
-    data: stats
-  });
+});
+
+/**
+ * Tüm (veya istenen) semboller için gerçek 24 saatlik yüzde değişimini döndürür (Binance ticker/24hr)
+ * Binance erişilemezse boş obje döner; frontend 24h sütununda — gösterir
+ */
+exports.get24hStatsBatch = asyncHandler(async (req, res) => {
+  const { customSymbols } = req.query;
+  let symbols = CRYPTO_SYMBOLS;
+  if (customSymbols && typeof customSymbols === 'string') {
+    symbols = customSymbols.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).map(s => s.endsWith('USDT') ? s : s + 'USDT');
+  }
+  try {
+    let data = await binanceService.getAll24hStats(symbols);
+    
+    // Find symbols missing or returning 0/null on Binance
+    const missingSymbols = symbols.filter(sym => !data || data[sym] === undefined || data[sym] === null || data[sym] === 0);
+    
+    if (missingSymbols.length > 0) {
+      logger.info(`🔍 24h stats missing for ${missingSymbols.length} symbols. Fetching fallback from CoinGecko...`);
+      try {
+        const cgStats = await coingeckoService.getMarketStatsBatch(missingSymbols);
+        if (cgStats && cgStats.change24h) {
+          data = { ...data, ...cgStats.change24h };
+        }
+      } catch (cgErr) {
+        logger.warn('⚠️ CoinGecko 24h stats fallback failed:', cgErr.message);
+      }
+    }
+    
+    return res.status(200).json({ status: 'success', data });
+  } catch (err) {
+    logger.warn('Binance 24h stats erişilemedi, CoinGecko fallback devreye giriyor:', err.message);
+    try {
+      const cgStats = await coingeckoService.getMarketStatsBatch(symbols);
+      return res.status(200).json({ status: 'success', data: cgStats.change24h });
+    } catch (cgErr) {
+      return res.status(200).json({ status: 'success', data: {} });
+    }
+  }
+});
+
+/**
+ * Tüm (veya istenen) semboller için 7 günlük yüzde değişimini döndürür (Binance klines)
+ * Binance erişilemezse boş obje döner; frontend 7d sütununda — gösterir
+ */
+exports.get7dStatsBatch = asyncHandler(async (req, res) => {
+  const { customSymbols } = req.query;
+  let symbols = CRYPTO_SYMBOLS;
+  if (customSymbols && typeof customSymbols === 'string') {
+    symbols = customSymbols.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).map(s => s.endsWith('USDT') ? s : s + 'USDT');
+  }
+  try {
+    let data = await binanceService.getAll7dStats(symbols);
+    
+    // Find symbols missing or returning 0/null on Binance
+    const missingSymbols = symbols.filter(sym => !data || data[sym] === undefined || data[sym] === null || data[sym] === 0);
+    
+    if (missingSymbols.length > 0) {
+      logger.info(`🔍 7d stats missing for ${missingSymbols.length} symbols. Fetching fallback from CoinGecko...`);
+      try {
+        const cgStats = await coingeckoService.getMarketStatsBatch(missingSymbols);
+        if (cgStats && cgStats.change7d) {
+          data = { ...data, ...cgStats.change7d };
+        }
+      } catch (cgErr) {
+        logger.warn('⚠️ CoinGecko 7d stats fallback failed:', cgErr.message);
+      }
+    }
+    
+    return res.status(200).json({ status: 'success', data });
+  } catch (err) {
+    logger.warn('Binance 7d stats erişilemedi, CoinGecko fallback devreye giriyor:', err.message);
+    try {
+      const cgStats = await coingeckoService.getMarketStatsBatch(symbols);
+      return res.status(200).json({ status: 'success', data: cgStats.change7d });
+    } catch (cgErr) {
+      return res.status(200).json({ status: 'success', data: {} });
+    }
+  }
 });
 
 /**
@@ -958,6 +1098,7 @@ exports.updateCoinMetadata = asyncHandler(async (req, res) => {
     const {
       name,
       description,
+      description_tr,
       logoUrl,
       homepage,
       whitepaper,
@@ -980,7 +1121,8 @@ exports.updateCoinMetadata = asyncHandler(async (req, res) => {
       coinId: existingMetadata?.coin_id || null,
       name: name || existingMetadata?.name || normalizedSymbol,
       logoUrl: logoUrl || existingMetadata?.logo_url || '',
-      description: description || existingMetadata?.description || '',
+      description: description !== undefined ? description : (existingMetadata?.description || ''),
+      description_tr: description_tr !== undefined ? description_tr : (existingMetadata?.description_tr || ''),
       marketCap: existingMetadata?.market_cap || 0,
       marketCapRank: existingMetadata?.market_cap_rank || null,
       homepage: homepage || existingMetadata?.homepage || '',

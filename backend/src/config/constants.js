@@ -12,7 +12,7 @@ const CRYPTO_SYMBOLS = [
 
 const BINANCE_API_URL = process.env.BINANCE_API_URL || 'https://api.binance.com/api/v3/ticker/price';
 const COINGECKO_API_URL = process.env.COINGECKO_API_URL || 'https://api.coingecko.com/api/v3/simple/price';
-const TABLE_NAME = process.env.TABLE_NAME || 'tbl_binance2_staj';
+const TABLE_NAME = process.env.TABLE_NAME || 'tbl_binance2';
 // Rate limit'i önlemek için varsayılan interval 1 dakika
 // WebSocket zaten gerçek zamanlı veri sağladığı için scheduler sadece yedek/fallback olarak çalışır
 const UPDATE_INTERVAL = process.env.UPDATE_INTERVAL || '*/1 * * * *'; // Varsayılan: 1 dakika (WebSocket yedek)
@@ -21,6 +21,19 @@ const DEFAULT_API_PROVIDER = process.env.DEFAULT_API_PROVIDER || 'coingecko';
 // WebSocket throttle interval (milisaniye) - her coin için veritabanına kayıt sıklığı
 const WEBSOCKET_SAVE_INTERVAL = parseInt(process.env.WEBSOCKET_SAVE_INTERVAL) || 60000; // 60 saniye (1 dakika)
 
+// Binance WebSocket (tek noktadan yapılandırma)
+const WS_BINANCE_URL = process.env.WS_BINANCE_URL || 'wss://stream.binance.com:9443/ws/!ticker@arr';
+const WS_CONNECT_TIMEOUT_MS = parseInt(process.env.WS_CONNECT_TIMEOUT_MS) || 10000;
+const WS_HEARTBEAT_INTERVAL_MS = parseInt(process.env.WS_HEARTBEAT_INTERVAL_MS) || 30000;
+const WS_RECONNECT_DELAY_MS = parseInt(process.env.WS_RECONNECT_DELAY_MS) || 5000;
+const WS_MAX_RECONNECT_ATTEMPTS = parseInt(process.env.WS_MAX_RECONNECT_ATTEMPTS) || 3;
+
+// CORS: tek kaynak; env string ise virgülle ayrılmış liste
+const CORS_ORIGIN_RAW = process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:3001';
+const CORS_ORIGIN = typeof CORS_ORIGIN_RAW === 'string'
+  ? CORS_ORIGIN_RAW.split(',').map((s) => s.trim()).filter(Boolean)
+  : Array.isArray(CORS_ORIGIN_RAW) ? CORS_ORIGIN_RAW : ['http://localhost:3000'];
+
 module.exports = {
   CRYPTO_SYMBOLS,
   BINANCE_API_URL,
@@ -28,6 +41,12 @@ module.exports = {
   TABLE_NAME,
   UPDATE_INTERVAL,
   DEFAULT_API_PROVIDER,
-  WEBSOCKET_SAVE_INTERVAL
+  WEBSOCKET_SAVE_INTERVAL,
+  WS_BINANCE_URL,
+  WS_CONNECT_TIMEOUT_MS,
+  WS_HEARTBEAT_INTERVAL_MS,
+  WS_RECONNECT_DELAY_MS,
+  WS_MAX_RECONNECT_ATTEMPTS,
+  CORS_ORIGIN
 };
 

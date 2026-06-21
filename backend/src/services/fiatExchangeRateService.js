@@ -60,12 +60,27 @@ class FiatExchangeRateService {
       const axios = require('axios');
       const COINGECKO_EXCHANGE_RATES_URL = 'https://api.coingecko.com/api/v3/exchange_rates';
 
-      const response = await axios.get(COINGECKO_EXCHANGE_RATES_URL, {
-        timeout: 15000,
-        headers: {
-          'Accept': 'application/json'
+      let response;
+      const maxRetries = 5;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          response = await axios.get(COINGECKO_EXCHANGE_RATES_URL, {
+            timeout: 15000,
+            headers: {
+              'Accept': 'application/json'
+            }
+          });
+          if (response && response.status === 200) break;
+        } catch (err) {
+          const isRetryable = err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT' || (err.response && err.response.status >= 500) || (err.response && err.response.status === 429);
+          if (isRetryable && attempt < maxRetries) {
+            logger.warn(`⚠️ CoinGecko fiat kurları çekilemedi (deneme ${attempt}/${maxRetries}): ${err.message}. ${(1.5 * attempt).toFixed(1)} saniye sonra tekrar denenecek...`);
+            await new Promise(r => setTimeout(r, 1500 * attempt));
+            continue;
+          }
+          throw err;
         }
-      });
+      }
 
       if (response.status === 200 && response.data && response.data.rates) {
         const rates = response.data.rates;

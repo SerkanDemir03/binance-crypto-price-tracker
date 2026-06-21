@@ -3,635 +3,12 @@ import { useQuery } from 'react-query'
 import { useNavigate } from 'react-router-dom'
 import { cryptoAPI } from '../../services/api'
 import LoadingSpinner from '../../components/Common/LoadingSpinner'
-import { TrendingUp, TrendingDown, RefreshCw, ArrowRight, Plus, X, Search, Info, ExternalLink, FileText } from 'lucide-react'
+import CryptoLogo from '../../components/Common/CryptoLogo'
+import { TrendingUp, TrendingDown, RefreshCw, ArrowRight, Plus, X, Search, Info, ExternalLink, FileText, BarChart3 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-
-// Varsayılan Binance coinleri (backend constants.js ile aynı)
-const DEFAULT_BINANCE_COINS = [
-  "BTC", "ETH", "BCC", "NEO", "LTC", "QTUM", "ADA",
-  "XRP", "EOS", "TUSD", "IOTA", "XLM", "ONT", "TRX",
-  "ETC", "ICX", "VEN", "NULS", "VET", "PAX", "BCHABC",
-  "BCHSV", "USDC", "LINK", "WAVES", "BTT", "USDS", "ONG",
-  "HOT", "ZIL", "ZRX", "FET", "BAT", "XMR", "ZEC",
-  "IOST", "CELR", "DASH", "NANO", "OMG", "THETA",
-  "ENJ", "MITH", "MATIC", "ATOM", "TFUEL", "ONE",
-  "FTM", "ALGO"
-]
-
-// Coin teknik bilgileri (API'den değil, önceden hazırlanmış doğru bilgiler)
-const COIN_TECHNICAL_INFO = {
-  'BTC': {
-    name: 'Bitcoin',
-    description: 'Bitcoin (BTC), 2009 yılında Satoshi Nakamoto tarafından oluşturulan ilk ve en büyük kripto paradır. Proof-of-Work (PoW) konsensüs mekanizması kullanır ve blockchain teknolojisinin öncüsüdür. Bitcoin, merkezi olmayan bir dijital para birimi olarak tasarlanmıştır ve sınırlı arzı (21 milyon) ile deflasyonist bir yapıya sahiptir.',
-    technology: 'Blockchain, SHA-256 Hash, Proof-of-Work',
-    consensus: 'Proof of Work (PoW)',
-    maxSupply: 21000000,
-    blockTime: '~10 dakika',
-    website: 'https://bitcoin.org',
-    whitepaper: 'https://bitcoin.org/bitcoin.pdf'
-  },
-  'ETH': {
-    name: 'Ethereum',
-    description: 'Ethereum (ETH), 2015 yılında Vitalik Buterin tarafından geliştirilen, akıllı kontratlar ve merkezi olmayan uygulamalar (DApps) için tasarlanmış bir blockchain platformudur. Ethereum 2.0 ile Proof-of-Stake (PoS) konsensüs mekanizmasına geçmiştir. ERC-20 token standardı ile binlerce token\'ın temelini oluşturur.',
-    technology: 'Blockchain, Smart Contracts, EVM, Proof-of-Stake',
-    consensus: 'Proof of Stake (PoS) - Ethereum 2.0',
-    maxSupply: null,
-    blockTime: '~12 saniye',
-    website: 'https://ethereum.org',
-    whitepaper: 'https://ethereum.org/en/whitepaper/'
-  },
-  'USDT': {
-    name: 'Tether USD',
-    description: 'Tether USD (USDT), 2014 yılında piyasaya sürülen, ABD Doları\'na sabitlenmiş (1:1) bir stablecoin\'dir. Tether Limited tarafından yönetilir ve çoklu blockchain ağlarında (Ethereum, Tron, Solana, vb.) çalışır. USDT, kripto para piyasasında en yaygın kullanılan stablecoin\'dir ve likidite sağlamak için kritik bir rol oynar.',
-    technology: 'Multi-chain (Ethereum, Tron, Solana, BSC, vb.)',
-    consensus: 'Fiat-backed Stablecoin',
-    maxSupply: null,
-    blockTime: 'Ağa bağlı',
-    website: 'https://tether.to',
-    whitepaper: 'https://tether.to/wp-content/uploads/2016/06/TetherWhitePaper.pdf'
-  },
-  'BNB': {
-    name: 'Binance Coin',
-    description: 'Binance Coin (BNB), Binance kripto para borsası tarafından 2017 yılında piyasaya sürülen bir utility token\'dır. BNB Chain (önceden Binance Smart Chain) üzerinde çalışır ve Binance ekosisteminde işlem ücretlerinde indirim, staking ve daha birçok kullanım alanına sahiptir. BNB, düzenli olarak yakılır (burn) ve arzı azaltılır.',
-    technology: 'BNB Chain, BEP-20, Proof of Staked Authority',
-    consensus: 'Proof of Staked Authority (PoSA)',
-    maxSupply: 200000000,
-    blockTime: '~3 saniye',
-    website: 'https://www.bnbchain.org',
-    whitepaper: 'https://github.com/bnb-chain/whitepaper'
-  },
-  'ADA': {
-    name: 'Cardano',
-    description: 'Cardano (ADA), 2017 yılında Charles Hoskinson tarafından kurulan, bilimsel araştırma ve peer-review süreçlerine dayalı bir blockchain platformudur. Ouroboros Proof-of-Stake konsensüs protokolünü kullanır. Cardano, sürdürülebilirlik, birlikte çalışabilirlik ve ölçeklenebilirlik odaklı üç katmanlı bir mimariye sahiptir.',
-    technology: 'Ouroboros, Haskell, Plutus, Marlowe',
-    consensus: 'Ouroboros Proof of Stake',
-    maxSupply: 45000000000,
-    blockTime: '~20 saniye',
-    website: 'https://cardano.org',
-    whitepaper: 'https://cardano.org/ouroboros/'
-  },
-  'XRP': {
-    name: 'Ripple',
-    description: 'Ripple (XRP), 2012 yılında Ripple Labs tarafından geliştirilen, bankalar ve finansal kurumlar arasında hızlı ve düşük maliyetli uluslararası ödemeler için tasarlanmış bir dijital varlıktır. Ripple Consensus Protocol (RCP) kullanır ve XRP Ledger üzerinde çalışır. XRP, geleneksel finansal sistemlerle entegrasyonu hedefler.',
-    technology: 'XRP Ledger, Ripple Consensus Protocol',
-    consensus: 'Ripple Consensus Protocol (RCP)',
-    maxSupply: 100000000000,
-    blockTime: '~3-5 saniye',
-    website: 'https://ripple.com',
-    whitepaper: 'https://ripple.com/files/ripple_consensus_whitepaper.pdf'
-  },
-  'DOGE': {
-    name: 'Dogecoin',
-    description: 'Dogecoin (DOGE), 2013 yılında Billy Markus ve Jackson Palmer tarafından şaka amaçlı oluşturulan, ancak zamanla popüler hale gelen bir kripto paradır. Litecoin\'in bir fork\'udur ve Scrypt algoritması kullanır. Dogecoin, düşük işlem ücretleri ve hızlı onay süreleri ile bilinir. Cömertlik ve hayırseverlik projelerinde sıklıkla kullanılır.',
-    technology: 'Scrypt, Proof-of-Work',
-    consensus: 'Proof of Work (PoW)',
-    maxSupply: null,
-    blockTime: '~1 dakika',
-    website: 'https://dogecoin.com',
-    whitepaper: 'https://github.com/dogecoin/dogecoin'
-  },
-  'SOL': {
-    name: 'Solana',
-    description: 'Solana (SOL), 2020 yılında Anatoly Yakovenko tarafından geliştirilen, yüksek performanslı bir blockchain platformudur. Proof of History (PoH) ve Proof of Stake (PoS) hibrit konsensüs mekanizması kullanır. Saniyede 65.000 işlem kapasitesi ile ölçeklenebilirlik odaklıdır. DeFi ve NFT projeleri için popüler bir platformdur.',
-    technology: 'Proof of History, Proof of Stake, Sealevel, Gulf Stream',
-    consensus: 'Proof of History + Proof of Stake',
-    maxSupply: null,
-    blockTime: '~400ms',
-    website: 'https://solana.com',
-    whitepaper: 'https://solana.com/solana-whitepaper.pdf'
-  },
-  'MATIC': {
-    name: 'Polygon',
-    description: 'Polygon (MATIC), Ethereum ağının ölçeklenebilirlik sorunlarını çözmek için 2017 yılında geliştirilen bir Layer 2 çözümdür. Proof of Stake (PoS) sidechain ve Plasma framework kullanır. Polygon, düşük işlem ücretleri ve hızlı işlem süreleri sağlar. Ethereum ile uyumludur ve binlerce DApp\'i destekler.',
-    technology: 'Plasma, Proof of Stake, Ethereum Sidechain',
-    consensus: 'Proof of Stake (PoS)',
-    maxSupply: 10000000000,
-    blockTime: '~2 saniye',
-    website: 'https://polygon.technology',
-    whitepaper: 'https://polygon.technology/lightpaper-polygon.pdf'
-  },
-  'LINK': {
-    name: 'Chainlink',
-    description: 'Chainlink (LINK), 2017 yılında Sergey Nazarov ve Steve Ellis tarafından geliştirilen, blockchain\'ler ile gerçek dünya verilerini bağlayan merkezi olmayan oracle ağıdır. Chainlink, akıllı kontratların harici verilere (fiyatlar, hava durumu, spor sonuçları vb.) güvenli bir şekilde erişmesini sağlar. DeFi ekosisteminin kritik bir altyapı bileşenidir.',
-    technology: 'Oracle Network, Smart Contracts, Off-chain Computation',
-    consensus: 'Oracle Network Consensus',
-    maxSupply: 1000000000,
-    blockTime: 'Ethereum ağına bağlı',
-    website: 'https://chain.link',
-    whitepaper: 'https://chain.link/whitepaper'
-  },
-  'DOT': {
-    name: 'Polkadot',
-    description: 'Polkadot (DOT), 2020 yılında Ethereum\'un kurucularından Gavin Wood tarafından geliştirilen, farklı blockchain\'leri birbirine bağlayan bir multi-chain protokolüdür. Nominated Proof of Stake (NPoS) konsensüs mekanizması kullanır. Polkadot, parachain\'ler aracılığıyla ölçeklenebilirlik ve birlikte çalışabilirlik sağlar.',
-    technology: 'Parachains, Relay Chain, Substrate, WebAssembly',
-    consensus: 'Nominated Proof of Stake (NPoS)',
-    maxSupply: null,
-    blockTime: '~6 saniye',
-    website: 'https://polkadot.network',
-    whitepaper: 'https://polkadot.network/Polkadot-lightpaper.pdf'
-  },
-  'AVAX': {
-    name: 'Avalanche',
-    description: 'Avalanche (AVAX), 2020 yılında Emin Gün Sirer tarafından geliştirilen, yüksek performanslı bir blockchain platformudur. Avalanche Consensus protokolü kullanır ve saniyede 4.500 işlem kapasitesine sahiptir. Üç ayrı blockchain\'den oluşur: Exchange Chain (X-Chain), Platform Chain (P-Chain) ve Contract Chain (C-Chain).',
-    technology: 'Avalanche Consensus, Subnets, Snow Protocol',
-    consensus: 'Avalanche Consensus',
-    maxSupply: 720000000,
-    blockTime: '~1 saniye',
-    website: 'https://www.avax.network',
-    whitepaper: 'https://assets.website-files.com/5d80307810123f5ff2afd13c/5d80307810123f01a0afd1e4_Avalanche%20Platform%20Whitepaper.pdf'
-  },
-  'ATOM': {
-    name: 'Cosmos',
-    description: 'Cosmos (ATOM), 2019 yılında Jae Kwon ve Ethan Buchman tarafından geliştirilen, "Blockchain\'lerin İnterneti" olarak adlandırılan bir blockchain ekosistemidir. Tendermint konsensüs algoritması ve Inter-Blockchain Communication (IBC) protokolü kullanır. Cosmos, farklı blockchain\'lerin birbirleriyle iletişim kurmasını sağlar.',
-    technology: 'Tendermint, IBC Protocol, Cosmos SDK',
-    consensus: 'Tendermint BFT',
-    maxSupply: null,
-    blockTime: '~6-7 saniye',
-    website: 'https://cosmos.network',
-    whitepaper: 'https://v1.cosmos.network/resources/whitepaper'
-  },
-  'LTC': {
-    name: 'Litecoin',
-    description: 'Litecoin (LTC), 2011 yılında Charlie Lee tarafından oluşturulan, Bitcoin\'in "gümüş" versiyonu olarak bilinen bir kripto paradır. Scrypt algoritması kullanır ve Bitcoin\'den daha hızlı işlem sürelerine sahiptir. Litecoin, SegWit ve Lightning Network gibi teknolojileri erken benimseyen coinlerden biridir.',
-    technology: 'Scrypt, SegWit, Lightning Network',
-    consensus: 'Proof of Work (PoW)',
-    maxSupply: 84000000,
-    blockTime: '~2.5 dakika',
-    website: 'https://litecoin.org',
-    whitepaper: 'https://litecoin.org/en/'
-  },
-  'UNI': {
-    name: 'Uniswap',
-    description: 'Uniswap (UNI), 2018 yılında Hayden Adams tarafından geliştirilen, merkezi olmayan bir kripto para borsası (DEX) protokolüdür. Automated Market Maker (AMM) modeli kullanır ve likidite havuzları üzerinden çalışır. Uniswap, Ethereum ağında en büyük DEX\'tir ve DeFi ekosisteminin temel taşlarından biridir.',
-    technology: 'AMM, Smart Contracts, Ethereum',
-    consensus: 'Ethereum ağına bağlı',
-    maxSupply: 1000000000,
-    blockTime: 'Ethereum ağına bağlı',
-    website: 'https://uniswap.org',
-    whitepaper: 'https://uniswap.org/whitepaper.pdf'
-  },
-  'ALGO': {
-    name: 'Algorand',
-    description: 'Algorand (ALGO), 2019 yılında MIT profesörü Silvio Micali tarafından geliştirilen, Pure Proof of Stake (PPoS) konsensüs mekanizması kullanan bir blockchain platformudur. Algorand, hızlı işlem süreleri, düşük ücretler ve karbon nötr yapısı ile öne çıkar. Kurumsal ve devlet uygulamaları için tasarlanmıştır.',
-    technology: 'Pure Proof of Stake, Byzantine Agreement',
-    consensus: 'Pure Proof of Stake (PPoS)',
-    maxSupply: 10000000000,
-    blockTime: '~4 saniye',
-    website: 'https://www.algorand.com',
-    whitepaper: 'https://www.algorand.com/resources/white-papers'
-  },
-  'FTM': {
-    name: 'Fantom',
-    description: 'Fantom (FTM), 2018 yılında geliştirilen, yüksek performanslı bir blockchain platformudur. Lachesis konsensüs protokolü kullanır ve saniyede binlerce işlem gerçekleştirebilir. Fantom, akıllı kontratlar, DeFi ve NFT uygulamaları için optimize edilmiştir. Düşük işlem ücretleri ve hızlı finality süreleri sunar.',
-    technology: 'Lachesis, aBFT, Opera Chain',
-    consensus: 'Lachesis aBFT',
-    maxSupply: 3175000000,
-    blockTime: '~1 saniye',
-    website: 'https://fantom.foundation',
-    whitepaper: 'https://fantom.foundation/developers'
-  },
-  'VET': {
-    name: 'VeChain',
-    description: 'VeChain (VET), 2015 yılında kurulan, tedarik zinciri yönetimi ve işletme uygulamaları için tasarlanmış bir blockchain platformudur. Proof of Authority (PoA) konsensüs mekanizması kullanır. VeChain, ürün doğrulama, sahtecilik önleme ve tedarik zinciri şeffaflığı için kullanılır. Kurumsal odaklı bir blockchain çözümüdür.',
-    technology: 'Proof of Authority, VeChainThor Blockchain',
-    consensus: 'Proof of Authority (PoA)',
-    maxSupply: 86712634466,
-    blockTime: '~10 saniye',
-    website: 'https://www.vechain.org',
-    whitepaper: 'https://www.vechain.org/whitepaper/'
-  },
-  'TRX': {
-    name: 'TRON',
-    description: 'TRON (TRX), 2017 yılında Justin Sun tarafından kurulan, içerik eğlence endüstrisi için tasarlanmış bir blockchain platformudur. Delegated Proof of Stake (DPoS) konsensüs mekanizması kullanır. TRON, yüksek işlem kapasitesi ve düşük ücretlerle içerik oluşturucuları ve tüketicileri doğrudan bağlamayı hedefler.',
-    technology: 'DPoS, TVM (TRON Virtual Machine)',
-    consensus: 'Delegated Proof of Stake (DPoS)',
-    maxSupply: null,
-    blockTime: '~3 saniye',
-    website: 'https://tron.network',
-    whitepaper: 'https://tron.network/static/doc/white_paper_v_2_0.pdf'
-  },
-  'XLM': {
-    name: 'Stellar',
-    description: 'Stellar (XLM), 2014 yılında Jed McCaleb tarafından kurulan, düşük maliyetli uluslararası ödemeler için tasarlanmış bir blockchain platformudur. Stellar Consensus Protocol (SCP) kullanır. Stellar, gelişmekte olan ülkelerdeki finansal hizmetlere erişimi artırmayı ve küresel ödeme altyapısını iyileştirmeyi hedefler.',
-    technology: 'Stellar Consensus Protocol, Horizon API',
-    consensus: 'Stellar Consensus Protocol (SCP)',
-    maxSupply: 50000000000,
-    blockTime: '~5 saniye',
-    website: 'https://www.stellar.org',
-    whitepaper: 'https://www.stellar.org/papers/stellar-consensus-protocol'
-  },
-  'EOS': {
-    name: 'EOS',
-    description: 'EOS (EOS), 2017 yılında Block.one tarafından geliştirilen, yüksek performanslı merkezi olmayan uygulamalar için tasarlanmış bir blockchain platformudur. Delegated Proof of Stake (DPoS) konsensüs mekanizması kullanır. EOS, saniyede milyonlarca işlem kapasitesi hedefleyen, ücretsiz işlem modeli sunan bir platformdur.',
-    technology: 'DPoS, WebAssembly, EOSIO',
-    consensus: 'Delegated Proof of Stake (DPoS)',
-    maxSupply: null,
-    blockTime: '~0.5 saniye',
-    website: 'https://eos.io',
-    whitepaper: 'https://github.com/EOSIO/Documentation/blob/master/TechnicalWhitePaper.md'
-  },
-  'AAVE': {
-    name: 'Aave',
-    description: 'Aave (AAVE), 2017 yılında kurulan, merkezi olmayan bir kredi protokolüdür. Kullanıcılar kripto varlıklarını yatırarak faiz kazanabilir veya teminat göstererek kredi alabilirler. Aave, flash loan\'lar (anlık krediler) özelliği ile bilinir. Ethereum ve diğer birçok blockchain\'de çalışır.',
-    technology: 'Smart Contracts, Lending Protocol, Flash Loans',
-    consensus: 'Ethereum ağına bağlı',
-    maxSupply: 16000000,
-    blockTime: 'Ethereum ağına bağlı',
-    website: 'https://aave.com',
-    whitepaper: 'https://github.com/aave/aave-protocol'
-  },
-  'FIL': {
-    name: 'Filecoin',
-    description: 'Filecoin (FIL), 2017 yılında Protocol Labs tarafından geliştirilen, merkezi olmayan depolama ağı için tasarlanmış bir blockchain platformudur. Proof of Replication ve Proof of Spacetime konsensüs mekanizmalarını kullanır. Filecoin, kullanıcıların boş depolama alanlarını kiralamasına ve dosya depolama hizmeti sunmasına olanak tanır.',
-    technology: 'IPFS, Proof of Replication, Proof of Spacetime',
-    consensus: 'Proof of Replication + Proof of Spacetime',
-    maxSupply: 2000000000,
-    blockTime: '~30 saniye',
-    website: 'https://filecoin.io',
-    whitepaper: 'https://filecoin.io/filecoin.pdf'
-  },
-  'THETA': {
-    name: 'Theta Network',
-    description: 'Theta Network (THETA), 2017 yılında kurulan, video streaming endüstrisi için tasarlanmış bir blockchain platformudur. Multi-BFT konsensüs mekanizması kullanır. Theta, kullanıcıların bant genişliğini ve bilgi işlem kaynaklarını paylaşarak token kazanmasına olanak tanır. YouTube ve Twitch gibi platformlara alternatif sunar.',
-    technology: 'Multi-BFT, Edge Network, Theta Blockchain',
-    consensus: 'Multi-BFT',
-    maxSupply: 1000000000,
-    blockTime: '~6 saniye',
-    website: 'https://www.thetatoken.org',
-    whitepaper: 'https://www.thetatoken.org/whitepaper'
-  },
-  'AXS': {
-    name: 'Axie Infinity',
-    description: 'Axie Infinity (AXS), 2018 yılında kurulan, NFT tabanlı bir oyun platformudur. Kullanıcılar Axie adı verilen dijital yaratıkları yetiştirir, savaştırır ve ticaret yapar. Play-to-Earn (Oyna-Kazan) modeli ile oyuncular oyun oynayarak kripto para kazanabilir. Ethereum ve Ronin sidechain\'de çalışır.',
-    technology: 'NFT, Smart Contracts, Ronin Sidechain',
-    consensus: 'Ethereum + Ronin Sidechain',
-    maxSupply: 270000000,
-    blockTime: 'Ronin: ~3 saniye',
-    website: 'https://axieinfinity.com',
-    whitepaper: 'https://whitepaper.axieinfinity.com'
-  },
-  'SAND': {
-    name: 'The Sandbox',
-    description: 'The Sandbox (SAND), 2012 yılında kurulan, kullanıcıların kendi oyunlarını ve deneyimlerini oluşturabildiği bir metaverse platformudur. NFT ve blockchain teknolojisi kullanır. Kullanıcılar LAND adı verilen sanal araziler satın alabilir, oyunlar oluşturabilir ve içerik üretebilir. Ethereum ve Polygon\'da çalışır.',
-    technology: 'NFT, VoxEdit, Game Maker, Ethereum/Polygon',
-    consensus: 'Ethereum/Polygon ağına bağlı',
-    maxSupply: 3000000000,
-    blockTime: 'Ağa bağlı',
-    website: 'https://www.sandbox.game',
-    whitepaper: 'https://installers.sandbox.game/The_Sandbox_Whitepaper_2020.pdf'
-  },
-  'MANA': {
-    name: 'Decentraland',
-    description: 'Decentraland (MANA), 2017 yılında kurulan, kullanıcıların sanal araziler satın alıp geliştirebildiği bir metaverse platformudur. Ethereum blockchain\'inde çalışır ve NFT teknolojisi kullanır. Kullanıcılar sanal dünyada içerik oluşturabilir, ticaret yapabilir ve sosyal etkileşimlerde bulunabilir.',
-    technology: 'NFT, Ethereum, Virtual Reality',
-    consensus: 'Ethereum ağına bağlı',
-    maxSupply: 2190000000,
-    blockTime: 'Ethereum ağına bağlı',
-    website: 'https://decentraland.org',
-    whitepaper: 'https://decentraland.org/whitepaper'
-  },
-  'BCC': {
-    name: 'Bitcoin Cash',
-    description: 'Bitcoin Cash (BCC/BCH), 2017 yılında Bitcoin\'den ayrılan (fork) bir kripto paradır. Daha büyük blok boyutu (8MB) ile daha hızlı ve ucuz işlemler sağlamayı hedefler. Bitcoin Cash, peer-to-peer elektronik nakit sistemi olarak tasarlanmıştır ve günlük ödemeler için optimize edilmiştir.',
-    technology: 'Blockchain, SHA-256, Proof-of-Work',
-    consensus: 'Proof of Work (PoW)',
-    maxSupply: 21000000,
-    blockTime: '~10 dakika',
-    website: 'https://bitcoincash.org',
-    whitepaper: 'https://bitcoincash.org/'
-  },
-  'NEO': {
-    name: 'NEO',
-    description: 'NEO, 2014 yılında kurulan, "Akıllı Ekonomi" vizyonu ile dijital varlıkların ve kimliklerin dijitalleştirilmesini hedefleyen bir blockchain platformudur. Delegated Byzantine Fault Tolerance (dBFT) konsensüs mekanizması kullanır. NEO, Çin\'de geliştirilen önemli bir blockchain projesidir.',
-    technology: 'dBFT, NeoVM, NeoFS, NeoID',
-    consensus: 'Delegated Byzantine Fault Tolerance (dBFT)',
-    maxSupply: 100000000,
-    blockTime: '~15-20 saniye',
-    website: 'https://neo.org',
-    whitepaper: 'https://docs.neo.org/docs/en-us/basic/whitepaper.html'
-  },
-  'QTUM': {
-    name: 'Qtum',
-    description: 'Qtum (QTUM), 2016 yılında kurulan, Bitcoin\'in UTXO modeli ile Ethereum\'un akıllı kontrat özelliklerini birleştiren hibrit bir blockchain platformudur. Proof of Stake (PoS) konsensüs mekanizması kullanır. Qtum, hem Bitcoin\'in güvenliğini hem de Ethereum\'un esnekliğini sunar.',
-    technology: 'UTXO, Smart Contracts, x86 Virtual Machine',
-    consensus: 'Proof of Stake (PoS)',
-    maxSupply: 107822406,
-    blockTime: '~2 dakika',
-    website: 'https://qtum.org',
-    whitepaper: 'https://qtum.org/uploads/files/a2772efe4dc8ed02b8b2b1c54535e0c0.pdf'
-  },
-  'IOTA': {
-    name: 'IOTA',
-    description: 'IOTA (MIOTA), 2016 yılında kurulan, Internet of Things (IoT) için tasarlanmış bir DAG (Directed Acyclic Graph) tabanlı kripto paradır. Geleneksel blockchain yerine Tangle adı verilen bir yapı kullanır. IOTA, ücretsiz ve ölçeklenebilir işlemler sunar.',
-    technology: 'Tangle (DAG), Coordicide, IOTA 2.0',
-    consensus: 'Tangle Consensus (Coordicide)',
-    maxSupply: 2779530283,
-    blockTime: 'DAG yapısı (blok yok)',
-    website: 'https://www.iota.org',
-    whitepaper: 'https://www.iota.org/research/academic-papers'
-  },
-  'ONT': {
-    name: 'Ontology',
-    description: 'Ontology (ONT), 2017 yılında kurulan, merkezi olmayan kimlik ve veri yönetimi için tasarlanmış bir blockchain platformudur. NEO ekosisteminin bir parçasıdır ve VBFT (Verifiable Byzantine Fault Tolerance) konsensüs mekanizması kullanır.',
-    technology: 'VBFT, Ontology ID, DDXF Protocol',
-    consensus: 'Verifiable Byzantine Fault Tolerance (VBFT)',
-    maxSupply: 1000000000,
-    blockTime: '~1 saniye',
-    website: 'https://ont.io',
-    whitepaper: 'https://ont.io/wp/Ontology-Introductory-White-Paper-EN.pdf'
-  },
-  'ETC': {
-    name: 'Ethereum Classic',
-    description: 'Ethereum Classic (ETC), 2016 yılında DAO hack\'inden sonra Ethereum\'dan ayrılan orijinal Ethereum blockchain\'idir. "Code is Law" felsefesini benimser ve Proof of Work konsensüs mekanizmasını kullanmaya devam eder. Ethereum Classic, değişmezlik prensibine bağlı kalır.',
-    technology: 'Blockchain, Smart Contracts, EVM, Proof-of-Work',
-    consensus: 'Proof of Work (PoW)',
-    maxSupply: null,
-    blockTime: '~15 saniye',
-    website: 'https://ethereumclassic.org',
-    whitepaper: 'https://ethereumclassic.org/whitepaper'
-  },
-  'ICX': {
-    name: 'ICON',
-    description: 'ICON (ICX), 2017 yılında Güney Kore\'de kurulan, farklı blockchain\'leri birbirine bağlayan bir ağ protokolüdür. Loop Fault Tolerance (LFT) konsensüs mekanizması kullanır. ICON, blockchain\'ler arası iletişimi ve işbirliğini kolaylaştırmayı hedefler.',
-    technology: 'Loopchain, BTP (Blockchain Transmission Protocol)',
-    consensus: 'Loop Fault Tolerance (LFT)',
-    maxSupply: 800460000,
-    blockTime: '~2 saniye',
-    website: 'https://icon.foundation',
-    whitepaper: 'https://icon.foundation/resources/whitepaper/ICON_Whitepaper_EN.pdf'
-  },
-  'VEN': {
-    name: 'VeChain (Eski)',
-    description: 'VEN, VeChain\'in eski token\'ıdır. 2018 yılında VET\'e dönüştürülmüştür. VeChain, tedarik zinciri yönetimi ve işletme uygulamaları için tasarlanmış bir blockchain platformudur.',
-    technology: 'Proof of Authority, VeChainThor Blockchain',
-    consensus: 'Proof of Authority (PoA)',
-    maxSupply: null,
-    blockTime: '~10 saniye',
-    website: 'https://www.vechain.org',
-    whitepaper: 'https://www.vechain.org/whitepaper/'
-  },
-  'NULS': {
-    name: 'NULS',
-    description: 'NULS, 2017 yılında kurulan, modüler mimariye sahip bir blockchain platformudur. Proof of Credit (PoC) konsensüs mekanizması kullanır. NULS, özelleştirilebilir blockchain çözümleri sunar ve işletmeler için hızlı blockchain geliştirme sağlar.',
-    technology: 'Modular Architecture, Microkernel, Chain Factory',
-    consensus: 'Proof of Credit (PoC)',
-    maxSupply: 100000000,
-    blockTime: '~10 saniye',
-    website: 'https://nuls.io',
-    whitepaper: 'https://nuls.io/pdf/NULS_Whitepaper_2.0.pdf'
-  },
-  'PAX': {
-    name: 'Paxos Standard',
-    description: 'PAX (Paxos Standard), 2018 yılında piyasaya sürülen, ABD Doları\'na sabitlenmiş bir stablecoin\'dir. Paxos Trust Company tarafından yönetilir ve düzenli olarak denetlenir. PAX, düzenleyici uyumluluğu ve şeffaflığı ile bilinir.',
-    technology: 'Ethereum ERC-20, Fiat-backed Stablecoin',
-    consensus: 'Ethereum ağına bağlı',
-    maxSupply: null,
-    blockTime: 'Ethereum ağına bağlı',
-    website: 'https://paxos.com',
-    whitepaper: 'https://paxos.com/standard/'
-  },
-  'BCHABC': {
-    name: 'Bitcoin Cash ABC',
-    description: 'Bitcoin Cash ABC, Bitcoin Cash\'in bir versiyonudur. 2018 yılında Bitcoin Cash ağında yaşanan hard fork sonrası oluşmuştur. Daha büyük blok boyutları ve hızlı işlemler sunar.',
-    technology: 'Blockchain, SHA-256, Proof-of-Work',
-    consensus: 'Proof of Work (PoW)',
-    maxSupply: 21000000,
-    blockTime: '~10 dakika',
-    website: 'https://bitcoincash.org',
-    whitepaper: 'https://bitcoincash.org/'
-  },
-  'BCHSV': {
-    name: 'Bitcoin SV',
-    description: 'Bitcoin SV (BSV), 2018 yılında Bitcoin Cash\'ten ayrılan bir kripto paradır. "Satoshi\'nin Vizyonu" (Satoshi\'s Vision) olarak adlandırılır ve orijinal Bitcoin protokolüne sadık kalmayı hedefler. Daha büyük blok boyutları (128MB) destekler.',
-    technology: 'Blockchain, SHA-256, Proof-of-Work',
-    consensus: 'Proof of Work (PoW)',
-    maxSupply: 21000000,
-    blockTime: '~10 dakika',
-    website: 'https://bitcoinsv.io',
-    whitepaper: 'https://bitcoinsv.io/'
-  },
-  'USDC': {
-    name: 'USD Coin',
-    description: 'USD Coin (USDC), 2018 yılında Circle ve Coinbase tarafından piyasaya sürülen, ABD Doları\'na sabitlenmiş bir stablecoin\'dir. Merkezi olmayan bir yapıya sahiptir ve düzenli olarak denetlenir. USDC, çoklu blockchain\'lerde (Ethereum, Solana, Avalanche vb.) çalışır.',
-    technology: 'Multi-chain (Ethereum, Solana, Avalanche, Polygon, vb.)',
-    consensus: 'Fiat-backed Stablecoin',
-    maxSupply: null,
-    blockTime: 'Ağa bağlı',
-    website: 'https://www.centre.io',
-    whitepaper: 'https://www.centre.io/pdfs/centre-whitepaper.pdf'
-  },
-  'WAVES': {
-    name: 'Waves',
-    description: 'Waves, 2016 yılında kurulan, kullanıcıların kendi token\'larını kolayca oluşturabildiği bir blockchain platformudur. Leased Proof of Stake (LPoS) konsensüs mekanizması kullanır. Waves, hızlı işlemler ve düşük ücretler sunar.',
-    technology: 'Waves-NG, Smart Contracts, Leased PoS',
-    consensus: 'Leased Proof of Stake (LPoS)',
-    maxSupply: null,
-    blockTime: '~1 dakika',
-    website: 'https://waves.tech',
-    whitepaper: 'https://waves.tech/files/docs/whitepaper_v1.pdf'
-  },
-  'BTT': {
-    name: 'BitTorrent',
-    description: 'BitTorrent (BTT), 2019 yılında TRON ekosistemine entegre edilen, dosya paylaşımı için tasarlanmış bir token\'dır. BitTorrent protokolü kullanıcılarına içerik paylaşımı karşılığında BTT token\'ları kazandırır. TRON blockchain\'inde çalışır.',
-    technology: 'TRON TRC-10, BitTorrent Protocol',
-    consensus: 'TRON ağına bağlı (DPoS)',
-    maxSupply: 990000000000,
-    blockTime: 'TRON ağına bağlı',
-    website: 'https://www.bittorrent.com',
-    whitepaper: 'https://www.bittorrent.com/token/btt/'
-  },
-  'USDS': {
-    name: 'StableUSD',
-    description: 'StableUSD (USDS), 2018 yılında piyasaya sürülen, ABD Doları\'na sabitlenmiş bir stablecoin\'dir. StableUSD, çoklu teminat desteği ile çalışır ve düzenli olarak denetlenir.',
-    technology: 'Ethereum ERC-20, Multi-collateral Stablecoin',
-    consensus: 'Ethereum ağına bağlı',
-    maxSupply: null,
-    blockTime: 'Ethereum ağına bağlı',
-    website: 'https://stably.io',
-    whitepaper: 'https://stably.io/whitepaper'
-  },
-  'ONG': {
-    name: 'Ontology Gas',
-    description: 'ONG (Ontology Gas), Ontology blockchain\'inde işlem ücretleri için kullanılan utility token\'dır. ONT token\'larını stake eden kullanıcılar ONG kazanır. ONG, Ontology ekosisteminde işlem yapmak için gereklidir.',
-    technology: 'Ontology Blockchain, VBFT',
-    consensus: 'Verifiable Byzantine Fault Tolerance (VBFT)',
-    maxSupply: null,
-    blockTime: '~1 saniye',
-    website: 'https://ont.io',
-    whitepaper: 'https://ont.io/wp/Ontology-Introductory-White-Paper-EN.pdf'
-  },
-  'HOT': {
-    name: 'Holo',
-    description: 'Holo (HOT), 2018 yılında kurulan, merkezi olmayan hosting platformu için tasarlanmış bir token\'dır. Holochain teknolojisi kullanır ve kullanıcıların kendi verilerini kontrol etmesini sağlar. Holo, merkezi sunuculara alternatif sunar.',
-    technology: 'Holochain, Distributed Hash Table (DHT)',
-    consensus: 'Holochain Consensus',
-    maxSupply: 177619433541,
-    blockTime: 'Holochain yapısı',
-    website: 'https://holo.host',
-    whitepaper: 'https://holo.host/whitepaper/'
-  },
-  'ZIL': {
-    name: 'Zilliqa',
-    description: 'Zilliqa (ZIL), 2017 yılında kurulan, sharding teknolojisi kullanan ilk blockchain platformlarından biridir. Practical Byzantine Fault Tolerance (pBFT) konsensüs mekanizması kullanır. Zilliqa, yüksek işlem kapasitesi (saniyede binlerce işlem) sunar.',
-    technology: 'Sharding, pBFT, Scilla Smart Contract Language',
-    consensus: 'Practical Byzantine Fault Tolerance (pBFT)',
-    maxSupply: 21000000000,
-    blockTime: '~45 saniye',
-    website: 'https://www.zilliqa.com',
-    whitepaper: 'https://docs.zilliqa.com/whitepaper.pdf'
-  },
-  'ZRX': {
-    name: '0x Protocol',
-    description: '0x (ZRX), 2017 yılında kurulan, merkezi olmayan borsalar (DEX) için açık protokol sağlayan bir token\'dır. 0x, farklı DEX\'lerin birbirleriyle iletişim kurmasını sağlar ve likidite havuzlarını birleştirir. Ethereum blockchain\'inde çalışır.',
-    technology: 'Smart Contracts, Ethereum, Relayer Network',
-    consensus: 'Ethereum ağına bağlı',
-    maxSupply: 1000000000,
-    blockTime: 'Ethereum ağına bağlı',
-    website: 'https://0x.org',
-    whitepaper: 'https://0x.org/pdfs/0x_white_paper.pdf'
-  },
-  'FET': {
-    name: 'Fetch.ai',
-    description: 'Fetch.ai (FET), 2017 yılında kurulan, yapay zeka ve makine öğrenmesi için tasarlanmış bir blockchain platformudur. Autonomous Economic Agents (AEA) kullanır. Fetch.ai, IoT cihazları ve akıllı şehirler için otonom ajanlar oluşturmayı hedefler.',
-    technology: 'AI/ML, Autonomous Agents, Multi-Agent Systems',
-    consensus: 'Proof of Stake (PoS)',
-    maxSupply: 1152997575,
-    blockTime: '~6 saniye',
-    website: 'https://fetch.ai',
-    whitepaper: 'https://fetch.ai/whitepaper'
-  },
-  'BAT': {
-    name: 'Basic Attention Token',
-    description: 'Basic Attention Token (BAT), 2017 yılında kurulan, dijital reklamcılık için tasarlanmış bir token\'dır. Brave tarayıcısı ile entegre çalışır. BAT, kullanıcılara reklam izleme karşılığında token kazandırır ve içerik oluşturucuları ödüllendirir.',
-    technology: 'Ethereum ERC-20, Brave Browser Integration',
-    consensus: 'Ethereum ağına bağlı',
-    maxSupply: 1500000000,
-    blockTime: 'Ethereum ağına bağlı',
-    website: 'https://basicattentiontoken.org',
-    whitepaper: 'https://basicattentiontoken.org/BAT_WhitePaper-4.pdf'
-  },
-  'XMR': {
-    name: 'Monero',
-    description: 'Monero (XMR), 2014 yılında kurulan, gizlilik odaklı bir kripto paradır. Ring signatures, stealth addresses ve RingCT teknolojileri kullanarak işlem gizliliği sağlar. Monero, tam anonimlik sunan bir kripto paradır.',
-    technology: 'Ring Signatures, Stealth Addresses, RingCT, CryptoNote',
-    consensus: 'Proof of Work (RandomX)',
-    maxSupply: null,
-    blockTime: '~2 dakika',
-    website: 'https://www.getmonero.org',
-    whitepaper: 'https://www.getmonero.org/resources/research-lab/'
-  },
-  'ZEC': {
-    name: 'Zcash',
-    description: 'Zcash (ZEC), 2016 yılında kurulan, gizlilik odaklı bir kripto paradır. zk-SNARKs (zero-knowledge proofs) teknolojisi kullanarak işlem gizliliği sağlar. Zcash, hem şeffaf hem de gizli işlemlere izin verir.',
-    technology: 'zk-SNARKs, Equihash, Shielded Transactions',
-    consensus: 'Proof of Work (Equihash)',
-    maxSupply: 21000000,
-    blockTime: '~75 saniye',
-    website: 'https://z.cash',
-    whitepaper: 'https://z.cash/technology/'
-  },
-  'IOST': {
-    name: 'IOST',
-    description: 'IOST, 2018 yılında kurulan, yüksek performanslı bir blockchain platformudur. Proof of Believability (PoB) konsensüs mekanizması kullanır. IOST, saniyede binlerce işlem kapasitesi ile ölçeklenebilirlik odaklıdır.',
-    technology: 'Efficient Distributed Sharding (EDS), PoB',
-    consensus: 'Proof of Believability (PoB)',
-    maxSupply: 90000000000,
-    blockTime: '~0.5 saniye',
-    website: 'https://iost.io',
-    whitepaper: 'https://iost.io/technology/'
-  },
-  'CELR': {
-    name: 'Celer Network',
-    description: 'Celer Network (CELR), 2018 yılında kurulan, blockchain\'ler arası ölçeklenebilirlik çözümü sağlayan bir Layer 2 protokolüdür. State Channels ve sidechain teknolojileri kullanır. Celer, düşük gecikme ve yüksek işlem kapasitesi sunar.',
-    technology: 'State Channels, Sidechains, Layer 2 Scaling',
-    consensus: 'Ağa bağlı',
-    maxSupply: 10000000000,
-    blockTime: 'Ağa bağlı',
-    website: 'https://www.celer.network',
-    whitepaper: 'https://www.celer.network/doc/CelerNetwork-Whitepaper.pdf'
-  },
-  'DASH': {
-    name: 'Dash',
-    description: 'Dash, 2014 yılında kurulan, hızlı ve özel işlemler sunan bir kripto paradır. Masternode ağı ve InstantSend özellikleri ile bilinir. Dash, günlük ödemeler için optimize edilmiştir ve düşük işlem ücretleri sunar.',
-    technology: 'X11 Algorithm, Masternodes, InstantSend, PrivateSend',
-    consensus: 'Proof of Work (X11)',
-    maxSupply: 18900000,
-    blockTime: '~2.5 dakika',
-    website: 'https://www.dash.org',
-    whitepaper: 'https://www.dash.org/wp-content/uploads/2014/09/dash-whitepaper.pdf'
-  },
-  'NANO': {
-    name: 'Nano',
-    description: 'Nano (NANO), 2015 yılında kurulan, ücretsiz ve anında işlemler sunan bir kripto paradır. Block-lattice mimarisi kullanır ve geleneksel blockchain yerine her hesabın kendi blockchain\'ine sahip olduğu bir yapı sunar. Nano, enerji verimli bir kripto paradır.',
-    technology: 'Block-lattice, Open Representative Voting (ORV)',
-    consensus: 'Open Representative Voting (ORV)',
-    maxSupply: 133248297,
-    blockTime: 'Anında',
-    website: 'https://nano.org',
-    whitepaper: 'https://nano.org/en/whitepaper'
-  },
-  'OMG': {
-    name: 'OMG Network',
-    description: 'OMG Network (OMG), 2017 yılında kurulan, Ethereum için bir Layer 2 ölçeklenebilirlik çözümüdür. Plasma teknolojisi kullanır ve Ethereum\'da daha hızlı ve ucuz işlemler sağlar. OMG Network, kurumsal kullanım için tasarlanmıştır.',
-    technology: 'Plasma, More Viable Plasma (MoreVP), Layer 2',
-    consensus: 'Ethereum ağına bağlı',
-    maxSupply: 140245398,
-    blockTime: 'Ethereum ağına bağlı',
-    website: 'https://omg.network',
-    whitepaper: 'https://omg.network/technology'
-  },
-  'ENJ': {
-    name: 'Enjin Coin',
-    description: 'Enjin (ENJ), 2017 yılında kurulan, oyun endüstrisi için NFT ve blockchain çözümleri sunan bir platformdur. Enjin, oyun geliştiricilerinin NFT oluşturmasını ve yönetmesini kolaylaştırır. Ethereum blockchain\'inde çalışır.',
-    technology: 'Ethereum ERC-1155, Enjin SDK, JumpNet',
-    consensus: 'Ethereum ağına bağlı',
-    maxSupply: 1000000000,
-    blockTime: 'Ethereum ağına bağlı',
-    website: 'https://enjin.io',
-    whitepaper: 'https://enjin.io/whitepaper'
-  },
-  'MITH': {
-    name: 'Mithril',
-    description: 'Mithril (MITH), 2018 yılında kurulan, sosyal medya içerik oluşturucularını ödüllendiren bir blockchain platformudur. Kullanıcılar sosyal medya içerikleri paylaşarak MITH token\'ları kazanabilir. Mithril, içerik oluşturucuları için bir ödül sistemi sunar.',
-    technology: 'Ethereum ERC-20, Social Media Integration',
-    consensus: 'Ethereum ağına bağlı',
-    maxSupply: 1000000000,
-    blockTime: 'Ethereum ağına bağlı',
-    website: 'https://mith.io',
-    whitepaper: 'https://mith.io/whitepaper'
-  },
-  'TFUEL': {
-    name: 'Theta Fuel',
-    description: 'Theta Fuel (TFUEL), Theta Network\'ün utility token\'ıdır. Theta ağında işlem ücretleri ve ödüller için kullanılır. TFUEL, video streaming ve edge computing işlemleri için gereklidir.',
-    technology: 'Theta Blockchain, Multi-BFT, Edge Network',
-    consensus: 'Multi-BFT',
-    maxSupply: null,
-    blockTime: '~6 saniye',
-    website: 'https://www.thetatoken.org',
-    whitepaper: 'https://www.thetatoken.org/whitepaper'
-  },
-  'ONE': {
-    name: 'Harmony',
-    description: 'Harmony (ONE), 2019 yılında kurulan, yüksek performanslı bir blockchain platformudur. Effective Proof of Stake (EPoS) konsensüs mekanizması ve sharding teknolojisi kullanır. Harmony, saniyede binlerce işlem kapasitesi ile ölçeklenebilirlik odaklıdır.',
-    technology: 'Sharding, EPoS, Fast Byzantine Fault Tolerance (FBFT)',
-    consensus: 'Effective Proof of Stake (EPoS)',
-    maxSupply: 12600000000,
-    blockTime: '~2 saniye',
-    website: 'https://www.harmony.one',
-    whitepaper: 'https://harmony.one/whitepaper.pdf'
-  },
-  'TUSD': {
-    name: 'TrueUSD',
-    description: 'TrueUSD (TUSD), 2018 yılında piyasaya sürülen, ABD Doları\'na sabitlenmiş bir stablecoin\'dir. TrustToken tarafından yönetilir ve düzenli olarak denetlenir. TUSD, şeffaflık ve düzenleyici uyumluluk odaklıdır.',
-    technology: 'Ethereum ERC-20, Fiat-backed Stablecoin',
-    consensus: 'Ethereum ağına bağlı',
-    maxSupply: null,
-    blockTime: 'Ethereum ağına bağlı',
-    website: 'https://www.trusttoken.com',
-    whitepaper: 'https://www.trusttoken.com/whitepaper'
-  }
-}
+import { DEFAULT_BINANCE_COINS, COIN_TECHNICAL_INFO } from '../../constants/coins'
+import { formatPrice, getCryptoName, getCryptoIcon } from '../../utils/cryptoUtils'
 
 // Coin Search Results Component (fiyat gösterimi için) - Modern Design
 const CoinSearchResults = ({ results, customCoins, onAddCoin, formatPrice }) => {
@@ -708,7 +85,9 @@ const CoinSearchResults = ({ results, customCoins, onAddCoin, formatPrice }) => 
 const DashboardPage = () => {
   const navigate = useNavigate()
   const [priceHistoryMap, setPriceHistoryMap] = useState({})
-  const [apiProvider, setApiProvider] = useState('binance') // 'binance' veya 'coingecko' - varsayılan: binance
+  const [change24hMap, setChange24hMap] = useState({}) // Gerçek 24h % (Binance)
+  const [change7dMap, setChange7dMap] = useState({})   // Gerçek 7d % (Binance klines)
+  const [apiProvider, setApiProvider] = useState('coingecko') // Binance engelli bölgelerde CoinGecko kullanılır
   const [cooldownSeconds, setCooldownSeconds] = useState(0) // Cooldown süresi
   const [cooldownResetTime, setCooldownResetTime] = useState(null) // Cooldown reset zamanı (timestamp)
   const [isFetching, setIsFetching] = useState(false) // İstek devam ediyor mu?
@@ -854,35 +233,34 @@ const DashboardPage = () => {
 
   useEffect(() => {
     if (prices.length > 0 && !isFetching) {
-      // Batch endpoint kullanarak tüm history'leri tek istekle çek
-      // Sadece gösterilen coinler için (performans için)
-      // handleFetchPrices sırasında çalışmasın (orada zaten çekiliyor)
+      // API'den gerçek mum geçmişini çek
       const fetchHistories = async () => {
         try {
-          // Gösterilen coinler için history çek
-          const response = await cryptoAPI.getAllPriceHistories(20, allDisplayCoins)
-          const historiesData = response.data.data || {}
-          
-          // Verileri formatla
+          const [historyRes, stats24hRes, stats7dRes] = await Promise.allSettled([
+            cryptoAPI.getKlinesBatch(allDisplayCoins, '4h', 42), // 7 gün
+            cryptoAPI.get24hStatsBatch(allDisplayCoins),
+            cryptoAPI.get7dStatsBatch(allDisplayCoins)
+          ])
+          const historiesData = historyRes.status === 'fulfilled' ? (historyRes.value.data.data || {}) : {}
           const formattedHistories = {}
           Object.keys(historiesData).forEach(symbol => {
             if (Array.isArray(historiesData[symbol]) && historiesData[symbol].length > 0) {
               formattedHistories[symbol] = historiesData[symbol]
-              .map((item) => ({
-                time: new Date(item.binancetime).toLocaleTimeString('tr-TR', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                }),
-                price: parseFloat(item.price),
-              }))
-              .reverse()
+                .map((item) => ({
+                  time: new Date(item.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+                  price: parseFloat(item.close), // kline verisi 'close' içerir
+                }))
             }
           })
-          
           setPriceHistoryMap(formattedHistories)
+          if (stats24hRes.status === 'fulfilled' && stats24hRes.value.data?.data) {
+            setChange24hMap(stats24hRes.value.data.data)
+          }
+          if (stats7dRes.status === 'fulfilled' && stats7dRes.value.data?.data) {
+            setChange7dMap(stats7dRes.value.data.data)
+          }
         } catch (error) {
           console.error('Error fetching histories:', error)
-          // Hata durumunda mevcut history'leri koru (boş map set etme)
         }
       }
       // Debounce ile hızlı değişikliklerde gereksiz istekleri önle
@@ -1065,13 +443,14 @@ const DashboardPage = () => {
       const message = responseData.message || 'Fiyatlar güncellendi'
       const totalInDb = responseData.totalInDb || 0
       
-      // 4. Veritabanından en güncel fiyatları ve history'leri paralel çek
-      const [updatedPricesResponse, historyResponse] = await Promise.allSettled([
-        cryptoAPI.getLatestPricesFromDB(customSymbols), // Sadece gösterilen coinler için
-        cryptoAPI.getAllPriceHistories(20, customSymbols) // Sadece gösterilen coinler için
+      // 4. Veritabanından en güncel fiyatları, history ve 24h istatistiklerini paralel çek
+      const [updatedPricesResponse, historyResponse, stats24hResponse, stats7dResponse] = await Promise.allSettled([
+        cryptoAPI.getLatestPricesFromDB(customSymbols),
+        cryptoAPI.getKlinesBatch(customSymbols, '4h', 42),
+        cryptoAPI.get24hStatsBatch(customSymbols),
+        cryptoAPI.get7dStatsBatch(customSymbols)
       ])
       
-      // History verilerini formatla
       if (historyResponse.status === 'fulfilled') {
         const historiesData = historyResponse.value.data.data || {}
         const histories = {}
@@ -1079,16 +458,18 @@ const DashboardPage = () => {
           if (Array.isArray(historiesData[symbol]) && historiesData[symbol].length > 0) {
             histories[symbol] = historiesData[symbol]
               .map((item) => ({
-                time: new Date(item.binancetime).toLocaleTimeString('tr-TR', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                }),
-                price: parseFloat(item.price),
+                time: new Date(item.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+                price: parseFloat(item.close),
               }))
-              .reverse()
           }
         })
         setPriceHistoryMap(histories)
+      }
+      if (stats24hResponse.status === 'fulfilled' && stats24hResponse.value.data?.data) {
+        setChange24hMap(stats24hResponse.value.data.data)
+      }
+      if (stats7dResponse.status === 'fulfilled' && stats7dResponse.value.data?.data) {
+        setChange7dMap(stats7dResponse.value.data.data)
       }
       
       // 5. React Query cache'ini güncelle
@@ -1361,20 +742,19 @@ const DashboardPage = () => {
         
         // History'leri de güncelle
         try {
-          const historyResponse = await cryptoAPI.getAllPriceHistories(20)
+          const historyResponse = await cryptoAPI.getKlinesBatch(updatedCustomCoins, '4h', 42)
           const historiesData = historyResponse.data.data || {}
           
           const histories = {}
           Object.keys(historiesData).forEach(sym => {
             histories[sym] = historiesData[sym]
               .map((item) => ({
-                time: new Date(item.binancetime).toLocaleTimeString('tr-TR', {
+                time: new Date(item.time).toLocaleTimeString('tr-TR', {
                   hour: '2-digit',
                   minute: '2-digit',
                 }),
-                price: parseFloat(item.price),
+                price: parseFloat(item.close),
               }))
-              .reverse()
           })
           
           setPriceHistoryMap(histories)
@@ -1466,38 +846,6 @@ const DashboardPage = () => {
     }
   }
 
-  // Format price
-  const formatPrice = (price) => {
-    if (!price) return 'N/A'
-    return new Intl.NumberFormat('tr-TR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 8,
-    }).format(price)
-  }
-
-  // Get crypto name without USDT
-  const getCryptoName = (symbol) => {
-    return symbol?.replace('USDT', '') || symbol
-  }
-
-  // Get crypto icon/emoji
-  const getCryptoIcon = (symbol) => {
-    const icons = {
-      BTC: '₿',
-      ETH: 'Ξ',
-      BNB: 'BNB',
-      ADA: '₳',
-      XRP: '✕',
-      DOGE: 'Ð',
-      DOT: '●',
-      LINK: '🔗',
-      LTC: 'Ł',
-      BCH: '₿',
-    }
-    const name = getCryptoName(symbol)
-    return icons[name] || '₿'
-  }
-
   // Loading state - sadece cache'de veri yoksa ve ilk yüklemede göster
   // Cache'de veri varsa göster, arka planda güncelle
   if (isLoading && !pricesData?.data?.data) {
@@ -1575,9 +923,9 @@ const DashboardPage = () => {
         <div className="absolute top-0 right-0 w-72 h-72 bg-amber-300/12 rounded-full blur-2xl animate-float" style={{ animationDelay: '4s' }}></div>
         <div className="absolute bottom-0 left-0 w-72 h-72 bg-orange-200/12 rounded-full blur-2xl animate-float" style={{ animationDelay: '5s' }}></div>
       </div>
-      {/* 429 Rate Limit Uyarısı (cache'deki veriler gösteriliyorsa) */}
+      {/* 429 Rate Limit uyarısı */}
       {show429Warning && (
-        <div className="glass border border-yellow-200/50 dark:border-yellow-800/50 rounded-lg p-4 flex flex-col md:flex-row items-center justify-between gap-3 animate-slide-down shadow-sm">
+        <div className="glass border border-amber-300/50 dark:border-amber-600/50 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-3 shadow-lg">
           <div className="flex items-center space-x-3">
             <div className="relative">
               <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
@@ -1600,79 +948,35 @@ const DashboardPage = () => {
         </div>
       )}
       
-      {/* Header with enhanced gradient background and 3D depth */}
-      <div className="relative overflow-hidden rounded-3xl shadow-2xl p-8 md:p-10 text-white mb-8" style={{ transform: 'translateZ(0)' }}>
-  {/* Deep layer - base gradient; use navy-oriented palette in dark mode */}
-  <div className="absolute inset-0 bg-gradient-to-br from-primary-900 via-primary-700 to-primary-400 gradient-animated dark:from-[#071428] dark:via-[#07283b] dark:to-[#0b3650]"></div>
-        
-        {/* Mid layer - mesh gradient for depth */}
-        <div className="absolute inset-0 mesh-gradient opacity-40"></div>
-        
-        {/* Overlay pattern - grid for texture */}
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xNSI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-30"></div>
-        
-        {/* Hexagon pattern for additional depth */}
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cdefs%3E%3Cpattern id=\'hex\' width=\'60\' height=\'60\' patternUnits=\'userSpaceOnUse\'%3E%3Cpath d=\'M30 0l26 15v30l-26 15L4 45V15z\' stroke=\'rgba(255,255,255,0.1)\' stroke-width=\'1\' fill=\'none\'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width=\'100%25\' height=\'100%25\' fill=\'url(%23hex)\'/%3E%3C/svg%3E')] opacity-20"></div>
-        
-        {/* Floating orbs for depth - multiple layers */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-white/12 rounded-full blur-3xl animate-float" style={{ transform: 'translateZ(-50px)' }}></div>
-        <div className="absolute bottom-0 left-0 w-72 h-72 bg-primary-300/18 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s', transform: 'translateZ(-30px)' }}></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-primary-200/16 rounded-full blur-3xl animate-float" style={{ animationDelay: '4s', transform: 'translateZ(-20px)' }}></div>
-        
-  {/* Glassmorphism overlay - darker for better text readability (stronger in dark mode) */}
-  <div className="absolute inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-sm" style={{ transform: 'translateZ(10px)' }}></div>
-        
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-          <div className="animate-slide-up">
-            <h1 className="text-4xl md:text-5xl font-semibold mb-4 flex items-center gap-3 tracking-tight">
-              <span className="bg-white/20 backdrop-blur-md rounded-xl p-3 shadow-lg border border-white/30">
-                💎
-              </span>
-              <span className="text-white/95">Kripto Para Fiyatları</span>
-            </h1>
-            <p className="text-white/80 text-lg font-normal bg-white/10 px-4 py-2 rounded-lg inline-block backdrop-blur-sm border border-white/10">
-              {prices.length > 0 ? (
-                <>
-                  <span className="font-medium text-white/90">{prices.length}</span> <span className="text-white/70">kripto para birimi canlı takip ediliyor</span>
-                </>
-              ) : (
-                <span className="text-white/70">Kripto para fiyatlarını takip etmeye başlayın</span>
-              )}
-            </p>
-          </div>
-          
-          {/* Modern Control Panel */}
-          <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
-            {/* Left Side - Coin Management */}
+      {/* Üst panel: başlık + kontroller */}
+      <div className="glass rounded-2xl shadow-xl border border-white/20 dark:border-gray-600/40 overflow-hidden">
+        <div className="p-6 md:p-8">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3 mb-2">
+                <CryptoLogo size="md" />
+                Kripto Para Fiyatları
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400 text-sm md:text-base">
+                {prices.length > 0 ? (
+                  <><span className="font-semibold text-primary-600 dark:text-primary-400">{prices.length}</span> kripto para canlı takip ediliyor</>
+                ) : (
+                  'Fiyatları güncelleyerek listeyi doldurun'
+                )}
+              </p>
+            </div>
             <div className="flex flex-wrap items-center gap-3">
-              {/* Coin Ekleme Butonu - Modern Design */}
               <button
                 onClick={() => setShowAddCoinModal(true)}
-                className="group relative flex items-center space-x-2 px-5 py-3 bg-gradient-to-r from-primary-500 to-primary-600 dark:from-primary-600 dark:to-primary-700 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 dark:hover:from-primary-700 dark:hover:to-primary-800 transition-all duration-300 shadow-lg hover:shadow-xl font-semibold text-sm border border-primary-400/30 dark:border-primary-500/30 overflow-hidden"
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600 text-white rounded-xl text-sm font-medium transition-colors shadow-md hover:shadow-lg"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
-                <Plus className="w-5 h-5 relative z-10 group-hover:rotate-90 transition-transform duration-300" />
-                <span className="relative z-10">Coin Ekle</span>
+                <Plus className="w-4 h-4" />
+                Coin Ekle
               </button>
-              
-              {/* Coin İstatistikleri - Modern Badge */}
-              <div className="flex items-center space-x-2 bg-white/10 dark:bg-gray-800/40 backdrop-blur-lg rounded-xl px-4 py-2.5 border border-white/20 dark:border-gray-700/50 shadow-md">
-                <div className="flex items-center space-x-1.5">
-                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                  <span className="text-xs font-semibold text-white/90">
-                    <span className="text-white/70">{DEFAULT_BINANCE_COINS.length}</span> varsayılan
-                  </span>
-                  <span className="text-white/50">+</span>
-                  <span className="text-xs font-semibold text-white/90">
-                    <span className="text-white/70">{customCoins.length}</span> özel
-                  </span>
-                  <span className="text-white/50">=</span>
-                  <span className="text-sm font-bold text-white">{allDisplayCoins.length}</span>
-                  <span className="text-xs text-white/70">coin</span>
-                </div>
+              <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-800/60 text-gray-700 dark:text-gray-300 text-xs font-medium">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                {DEFAULT_BINANCE_COINS.length} varsayılan + {customCoins.length} özel = <span className="font-semibold">{allDisplayCoins.length} coin</span>
               </div>
-              
-              {/* Custom Coin Temizleme - Modern Design */}
               {customCoins.length > 0 && (
                 <button
                   onClick={() => {
@@ -1681,125 +985,61 @@ const DashboardPage = () => {
                       toast.success('Tüm özel coin\'ler kaldırıldı')
                     }
                   }}
-                  className="group flex items-center space-x-2 px-4 py-2.5 bg-white/10 dark:bg-gray-800/40 backdrop-blur-lg rounded-xl text-white/90 hover:bg-white/20 dark:hover:bg-gray-800/60 transition-all duration-300 text-xs font-semibold border border-white/20 dark:border-gray-700/50 shadow-md hover:shadow-lg"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 text-xs font-medium transition-colors"
                   title="Özel coin'leri temizle"
                 >
-                  <X className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
-                  <span>Temizle</span>
+                  <X className="w-3.5 h-3.5" /> Temizle
                 </button>
               )}
-            </div>
-            
-            {/* Right Side - API & Actions */}
-            <div className="flex flex-wrap items-center gap-3">
-              {/* API Provider Seçimi - Modern Design */}
-              <div className="relative group">
-                <div className="flex items-center space-x-2 bg-white/10 dark:bg-gray-800/40 backdrop-blur-lg rounded-xl px-4 py-2.5 border border-white/20 dark:border-gray-700/50 shadow-md">
-                  <label className="text-xs font-semibold text-white/70 flex items-center space-x-1">
-                    <span>API</span>
-                    <span className="text-white/50">:</span>
-                  </label>
-                  <select
-                    value={apiProvider}
-                    onChange={(e) => {
-                      const newProvider = e.target.value
-                      const oldProvider = apiProvider
-                      setApiProvider(newProvider)
-                      setCooldownSeconds(0)
-                      setCooldownResetTime(null)
-                      setIsFetching(false)
-                      if (oldProvider !== newProvider) {
-                        toast.success(
-                          `API değiştirildi: ${newProvider === 'binance' ? 'Binance' : 'CoinGecko'}. Rate limit sıfırlandı.`,
-                          { duration: 3000 }
-                        )
-                      }
-                    }}
-                    disabled={isFetching}
-                    className="bg-white/20 dark:bg-gray-700/50 text-white font-semibold rounded-lg px-3 py-1.5 text-xs border border-white/30 dark:border-gray-600/50 focus:outline-none focus:ring-2 focus:ring-primary-400/50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm appearance-none pr-8 hover:bg-white/30 dark:hover:bg-gray-700/70 transition-colors"
-                  >
-                    <option value="binance" className="bg-gray-800 text-white">Binance</option>
-                    <option value="coingecko" className="bg-gray-800 text-white">CoinGecko</option>
-                  </select>
-                  <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none">
-                    <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
+              <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700">
+                <label className="text-xs text-gray-500 dark:text-gray-400">API</label>
+                <select
+                  value={apiProvider}
+                  onChange={(e) => {
+                    const newProvider = e.target.value
+                    const oldProvider = apiProvider
+                    setApiProvider(newProvider)
+                    setCooldownSeconds(0)
+                    setCooldownResetTime(null)
+                    setIsFetching(false)
+                    if (oldProvider !== newProvider) {
+                      toast.success(`API: ${newProvider === 'binance' ? 'Binance' : 'CoinGecko'}`, { duration: 3000 })
+                    }
+                  }}
+                  disabled={isFetching}
+                  className="bg-transparent text-gray-800 dark:text-gray-200 font-medium text-xs border-0 focus:ring-0 cursor-pointer"
+                  title={apiProvider === 'binance' ? 'Binance erişilemiyorsa CoinGecko seçin' : 'Fiyatlar CoinGecko üzerinden güncellenir'}
+                >
+                  <option value="binance">Binance</option>
+                  <option value="coingecko">CoinGecko</option>
+                </select>
               </div>
-              
-              {/* Fiyatları Güncelle Butonu - Modern Design */}
               <button
                 onClick={handleFetchPrices}
                 disabled={isFetching || cooldownSeconds > 0}
-                className={`group relative flex items-center space-x-2 px-5 py-3 rounded-xl transition-all duration-300 shadow-lg font-semibold text-sm overflow-hidden ${
+                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                   isFetching || cooldownSeconds > 0
-                    ? 'bg-white/10 dark:bg-gray-800/40 text-white/50 cursor-not-allowed border border-white/10 dark:border-gray-700/30'
-                    : 'bg-white/20 dark:bg-gray-800/40 text-white hover:bg-white/30 dark:hover:bg-gray-800/60 border border-white/30 dark:border-gray-700/50 hover:shadow-xl'
+                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-800 dark:bg-gray-700 text-white hover:bg-gray-700 dark:hover:bg-gray-600'
                 }`}
               >
-                {!isFetching && cooldownSeconds === 0 && (
-                  <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
-                )}
-                <RefreshCw 
-                  className={`w-5 h-5 relative z-10 transition-transform duration-300 ${
-                    isFetching ? 'animate-spin' : 'group-hover:rotate-180'
-                  }`} 
-                />
-                <span className="relative z-10">
-                  {isFetching 
-                    ? 'Güncelleniyor...' 
-                    : cooldownSeconds > 0 
-                      ? `Bekle (${cooldownSeconds}s)` 
-                      : 'Güncelle'
-                  }
-                </span>
+                <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+                {isFetching ? 'Güncelleniyor...' : cooldownSeconds > 0 ? `Bekle (${cooldownSeconds}s)` : 'Güncelle'}
               </button>
-              
-              {/* Rate Limit Uyarısı - Modern Design */}
               {cooldownSeconds > 0 && (
-                <div className="flex items-center space-x-2.5 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 dark:from-yellow-600/30 dark:to-orange-600/30 backdrop-blur-lg px-4 py-2.5 rounded-xl border border-yellow-400/30 dark:border-yellow-500/30 shadow-lg">
-                  <div className="relative">
-                    <div className="w-2.5 h-2.5 bg-yellow-400 dark:bg-yellow-500 rounded-full animate-pulse"></div>
-                    <div className="absolute inset-0 w-2.5 h-2.5 bg-yellow-400 dark:bg-yellow-500 rounded-full animate-ping opacity-60"></div>
-                  </div>
-                  <span className="text-xs font-semibold text-yellow-100 dark:text-yellow-200 drop-shadow-sm">
-                    Rate limit: {cooldownSeconds}s
-                  </span>
-                </div>
+                <span className="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
+                  Rate limit
+                </span>
               )}
             </div>
           </div>
-        </div>
-        
-        {/* Veritabanı Durumu Bilgisi - Modern Design */}
-        <div className="mt-6 bg-white/10 dark:bg-gray-800/40 backdrop-blur-lg rounded-xl px-5 py-4 text-white border border-white/20 dark:border-gray-700/50 shadow-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="relative">
-                <div className="w-3 h-3 bg-green-400 dark:bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-400/50"></div>
-                <div className="absolute inset-0 w-3 h-3 bg-green-400 dark:bg-green-500 rounded-full animate-ping opacity-60"></div>
-              </div>
-              <div>
-                <span className="text-sm font-semibold text-white/95">Veritabanı Aktif</span>
-                <span className="text-sm text-white/70 ml-2">
-                  {prices.length > 0 
-                    ? `• ${prices.length} coin takip ediliyor`
-                    : '• Hazır, coin ekleyebilirsiniz'
-                  }
-                </span>
-              </div>
-            </div>
-            <div className="hidden md:block">
-              <p className="text-xs text-white/60 font-medium">
-                Otomatik kayıt ve fiyat takibi aktif
-              </p>
-            </div>
+          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+            <span>Veritabanı aktif</span>
+            {prices.length > 0 && <span>• {prices.length} coin takip ediliyor</span>}
+            <span className="hidden sm:inline">• Otomatik kayıt ve fiyat takibi açık</span>
           </div>
-          <p className="text-xs text-white/60 mt-3 ml-6 md:hidden">
-            Coin eklediğinizde otomatik olarak veritabanına kaydedilir ve fiyatları takip edilir.
-          </p>
         </div>
       </div>
 
@@ -1853,68 +1093,68 @@ const DashboardPage = () => {
           </div>
         </div>
       ) : (
-        <div className="glass rounded-3xl shadow-2xl border-2 border-white/30 dark:border-gray-700/30 overflow-hidden bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl">
-          {/* Table Header */}
-          <div className="relative overflow-hidden bg-gradient-to-br from-primary-700 via-primary-600 to-primary-500 dark:from-[#071428] dark:via-[#07283b] dark:to-[#0b3650] px-6 py-4 gradient-animated">
-            {/* Subtle overlay for depth */}
-            <div className="absolute inset-0 bg-black/10 dark:bg-black/20"></div>
-            {/* Mesh gradient overlay */}
-            <div className="absolute inset-0 mesh-gradient opacity-30"></div>
-            {/* Content */}
-            <div className="relative z-10">
-              <h2 className="text-2xl font-bold text-white drop-shadow-lg">Kripto Para Fiyatları</h2>
-              <p className="text-white/90 text-sm mt-1">Piyasa sıralamasına göre listelenmiştir</p>
+        <div className="glass rounded-2xl shadow-xl border border-white/20 dark:border-gray-600/40 overflow-hidden">
+          <div className="relative px-6 py-5 border-b border-primary-200 dark:border-primary-600/50 overflow-hidden bg-primary-100/90 dark:bg-primary-900/50">
+            <div className="absolute bottom-0 left-0 right-0 h-px bg-primary-300/60 dark:bg-primary-600/40 pointer-events-none" />
+            <div className="relative flex items-center gap-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary-500/25 dark:bg-primary-500/35 text-primary-600 dark:text-primary-400">
+                <BarChart3 size={22} strokeWidth={2} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">Kripto Paralar</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Piyasa sıralamasına göre listelenmiştir</p>
+              </div>
             </div>
           </div>
-          
-          {/* Table */}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-full divide-y divide-gray-200/50 dark:divide-gray-700/50">
-              <thead className="bg-gray-100/80 dark:bg-gray-800/80 backdrop-blur-sm border-b-2 border-gray-200/50 dark:border-gray-700/50 sticky top-0 z-10">
+            <table className="w-full min-w-[640px]">
+              <thead className="bg-gray-100 dark:bg-gray-800 border-b-2 border-gray-200 dark:border-gray-700 sticky top-0 z-10">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">#</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Name</th>
-                  <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Price</th>
-                  <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">24h Change</th>
-                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Price Graph (7D)</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider w-12">#</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Name</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider w-24">24h %</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider w-24">7d %</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider min-w-[120px]">Price</th>
+                  <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider w-36">Price Graph (7D)</th>
                 </tr>
               </thead>
-              <tbody className="bg-white/50 dark:bg-gray-900/50 divide-y divide-gray-200/30 dark:divide-gray-700/30">
+              <tbody className="bg-white dark:bg-gray-900/30 divide-y divide-gray-100 dark:divide-gray-700/50">
                 {prices.map((crypto, index) => {
             // Eğer coin yükleniyorsa (veritabanında yok), loading göster
             if (crypto._isLoading) {
               return (
-                <tr key={crypto.name} className="hover:bg-gray-100/50 dark:hover:bg-gray-800/70 transition-colors bg-white/30 dark:bg-gray-900/30">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    <div className="h-4 w-8 bg-gray-200/50 dark:bg-gray-700/50 rounded animate-pulse"></div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-gray-200/50 dark:bg-gray-700/50 rounded-full animate-pulse"></div>
-                      <div>
-                        <div className="h-4 w-24 bg-gray-200/50 dark:bg-gray-700/50 rounded mb-1 animate-pulse"></div>
-                        <div className="h-3 w-16 bg-gray-200/50 dark:bg-gray-700/50 rounded animate-pulse"></div>
-                      </div>
+                <tr key={crypto.name} className="bg-white dark:bg-gray-900/30">
+                  <td className="px-4 py-3"><div className="h-4 w-6 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" /></td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse" />
+                      <div className="h-4 w-28 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="h-4 w-24 bg-gray-200/50 dark:bg-gray-700/50 rounded animate-pulse ml-auto"></div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="h-6 w-20 bg-gray-200/50 dark:bg-gray-700/50 rounded animate-pulse ml-auto"></div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="h-12 w-32 bg-gray-200/50 dark:bg-gray-700/50 rounded mx-auto animate-pulse"></div>
-                  </td>
+                  <td className="px-4 py-3 text-right"><div className="h-4 w-12 bg-gray-200 dark:bg-gray-700 rounded animate-pulse ml-auto" /></td>
+                  <td className="px-4 py-3 text-right"><div className="h-4 w-12 bg-gray-200 dark:bg-gray-700 rounded animate-pulse ml-auto" /></td>
+                  <td className="px-4 py-3 text-right"><div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded animate-pulse ml-auto" /></td>
+                  <td className="px-4 py-3"><div className="h-10 w-32 bg-gray-200 dark:bg-gray-700 rounded mx-auto animate-pulse" /></td>
                 </tr>
               )
             }
             
             const history = priceHistoryMap[crypto.name] || []
-            const priceChange = history.length >= 2 
-              ? ((history[history.length - 1]?.price || 0) - (history[0]?.price || 0)) / (history[0]?.price || 1) * 100
-              : 0
+            // Gerçek 24 saatlik değişim (Binance) varsa onu kullan, yoksa history'den hesapla
+            const real24h = change24hMap[crypto.name]
+            const priceChange = (real24h != null && real24h !== undefined)
+              ? real24h
+              : (history.length >= 2
+                ? ((history[history.length - 1]?.price || 0) - (history[0]?.price || 0)) / (history[0]?.price || 1) * 100
+                : 0)
             const isPositive = priceChange >= 0
+            const isZeroChange = Math.abs(priceChange) < 0.005
+            const has24hValue = (real24h != null && real24h !== undefined) || history.length >= 2
+            const real7d = change7dMap[crypto.name]
+            const change7d = (real7d != null && real7d !== undefined) ? real7d : 0
+            const is7dPositive = change7d >= 0
+            const is7dZero = Math.abs(change7d) < 0.005
+            const has7dValue = (real7d != null && real7d !== undefined)
             
             // Calculate Y-axis domain to emphasize trend direction
             const yAxisDomain = history.length >= 2
@@ -1941,71 +1181,61 @@ const DashboardPage = () => {
               <tr
                 key={crypto.name}
                 onClick={() => navigate(`/crypto/${crypto.name}`)}
-                className="hover:bg-gray-100/70 dark:hover:bg-gray-800/70 transition-all duration-200 cursor-pointer group bg-white/40 dark:bg-gray-900/40 border-b border-gray-200/30 dark:border-gray-700/30"
+                className="group cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
               >
-                {/* Sıra Numarası */}
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-600 dark:text-gray-300">
+                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-500 dark:text-gray-400">
                   {index + 1}
                 </td>
-                
-                {/* Coin Adı ve Sembolü */}
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center space-x-3">
-                    <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/80 dark:to-primary-800/80 flex items-center justify-center text-lg font-bold text-primary-700 dark:text-primary-300 border-2 border-primary-200/50 dark:border-primary-700/50 shadow-sm group-hover:shadow-md transition-shadow">
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-lg font-bold text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600">
                       {getCryptoIcon(crypto.name)}
                     </div>
-                    <div>
-                      <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-                        {getCryptoName(crypto.name)}
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors truncate">
+                        {getCryptoName(crypto.name)} <span className="text-gray-500 dark:text-gray-400 font-medium">• {crypto.name}</span>
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">{crypto.name}</div>
                     </div>
                   </div>
                 </td>
-                
-                {/* Fiyat */}
-                <td className="px-6 py-4 whitespace-nowrap text-right">
-                  {hasPrice ? (
-                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                      ${formatPrice(crypto.price)}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-gray-400 dark:text-gray-500">N/A</div>
-                  )}
-                </td>
-                
-                {/* 24 Saatlik Değişim */}
-                <td className="px-6 py-4 whitespace-nowrap text-right">
-                  {hasEnoughHistory ? (
-                    <div className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-sm font-semibold shadow-sm ${
-                      isPositive 
-                        ? 'bg-green-50/80 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200/50 dark:border-green-800/50' 
-                        : 'bg-red-50/80 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200/50 dark:border-red-800/50'
+                <td className="px-4 py-3 whitespace-nowrap text-right">
+                  {has24hValue ? (
+                    <span className={`text-sm font-semibold ${
+                      isZeroChange ? 'text-gray-500 dark:text-gray-400' : isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
                     }`}>
-                      {isPositive ? (
-                        <TrendingUp className="w-4 h-4" />
-                      ) : (
-                        <TrendingDown className="w-4 h-4" />
-                      )}
-                      <span>{isPositive ? '+' : ''}{priceChange.toFixed(2)}%</span>
-                    </div>
-                  ) : hasPrice ? (
-                    <div className="text-sm text-gray-400 dark:text-gray-500">-</div>
+                      {isZeroChange ? '0.00' : (isPositive ? '+' : '') + priceChange.toFixed(2)}%
+                    </span>
                   ) : (
-                    <div className="text-sm text-gray-400 dark:text-gray-500">N/A</div>
+                    <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
                   )}
                 </td>
-                
-                {/* 7 Günlük Grafik */}
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-4 py-3 whitespace-nowrap text-right">
+                  {has7dValue ? (
+                    <span className={`text-sm font-semibold ${
+                      is7dZero ? 'text-gray-500 dark:text-gray-400' : is7dPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+                    }`}>
+                      {is7dZero ? '0.00' : (is7dPositive ? '+' : '') + change7d.toFixed(2)}%
+                    </span>
+                  ) : (
+                    <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-right">
+                  {hasPrice ? (
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">${formatPrice(crypto.price)}</span>
+                  ) : (
+                    <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
                   {hasEnoughHistory ? (
-                    <div className="h-12 w-40 mx-auto bg-gray-50/50 dark:bg-gray-800/30 rounded-lg p-1 border border-gray-200/30 dark:border-gray-700/30">
+                    <div className="h-9 w-28 mx-auto bg-gray-50 dark:bg-gray-800/50 rounded-md p-1 border border-gray-100 dark:border-gray-700/50">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={history} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
                           <defs>
                             <linearGradient id={`gradient-table-${crypto.name}`} x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor={isPositive ? '#10b981' : '#ef4444'} stopOpacity={0.4}/>
-                              <stop offset="95%" stopColor={isPositive ? '#10b981' : '#ef4444'} stopOpacity={0}/>
+                              <stop offset="5%" stopColor={isZeroChange ? '#6b7280' : isPositive ? '#10b981' : '#ef4444'} stopOpacity={isZeroChange ? 0.25 : 0.4}/>
+                              <stop offset="95%" stopColor={isZeroChange ? '#6b7280' : isPositive ? '#10b981' : '#ef4444'} stopOpacity={0}/>
                             </linearGradient>
                           </defs>
                           <YAxis hide domain={yAxisDomain} />
@@ -2021,7 +1251,7 @@ const DashboardPage = () => {
                           <Line
                             type="monotone"
                             dataKey="price"
-                            stroke={isPositive ? '#10b981' : '#ef4444'}
+                            stroke={isZeroChange ? '#6b7280' : isPositive ? '#10b981' : '#ef4444'}
                             strokeWidth={2}
                             dot={false}
                             isAnimationActive={true}
@@ -2031,8 +1261,8 @@ const DashboardPage = () => {
                       </ResponsiveContainer>
                     </div>
                   ) : (
-                    <div className="h-12 w-40 mx-auto flex items-center justify-center bg-gray-50/30 dark:bg-gray-800/20 rounded-lg border border-gray-200/20 dark:border-gray-700/20">
-                      <div className="text-xs text-gray-400 dark:text-gray-500">-</div>
+                    <div className="h-9 w-28 mx-auto flex items-center justify-center bg-gray-50 dark:bg-gray-800/30 rounded-md border border-gray-100 dark:border-gray-700/50">
+                      <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
                     </div>
                   )}
                 </td>

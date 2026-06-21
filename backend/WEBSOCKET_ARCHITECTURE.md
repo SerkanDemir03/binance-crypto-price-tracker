@@ -13,7 +13,7 @@ Binance WebSocket Stream
     ↓
 PriceService (priceService.js)
     ↓
-PostgreSQL Database (tbl_binance2_staj)
+PostgreSQL Database (tbl_binance2)
     ↓
 Socket.io → Frontend (Real-time updates)
 ```
@@ -114,7 +114,7 @@ await metadataService.invalidateCache('BTC');
 
 ### Price Table (existing)
 ```sql
-CREATE TABLE tbl_binance2_staj (
+CREATE TABLE tbl_binance2 (
   id SERIAL PRIMARY KEY,
   name VARCHAR(20),
   price NUMERIC,
@@ -217,7 +217,7 @@ The server will:
 ### Real-Time Price Update:
 1. Binance WebSocket receives price update for BTCUSDT
 2. `priceService.js` processes the update
-3. Price saved to `tbl_binance2_staj` table
+3. Price saved to `tbl_binance2` table
 4. Price emitted to frontend via Socket.io (`price-update-single` event)
 5. Frontend updates UI in real-time
 

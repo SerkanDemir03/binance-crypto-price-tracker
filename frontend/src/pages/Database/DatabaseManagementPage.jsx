@@ -119,9 +119,9 @@ const DatabaseManagementPage = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-primary-600 via-primary-500 to-purple-600 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 rounded-2xl shadow-2xl p-8 text-white">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIxLjUiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-20"></div>
+      {/* Header - tek renk (mor yok) */}
+      <div className="relative overflow-hidden rounded-2xl shadow-2xl p-8 text-white bg-primary-600 dark:bg-gray-800">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIxLjUiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-20 pointer-events-none" aria-hidden="true" />
         <div className="relative z-10 flex items-center justify-between">
           <div className="animate-slide-up">
             <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
@@ -134,13 +134,15 @@ const DatabaseManagementPage = () => {
               Veritabanı bağlantı durumu, tablo yapısı ve istatistikler
             </p>
           </div>
-          <button
-            onClick={handleRefresh}
-            className="flex items-center space-x-2 px-6 py-3 bg-white dark:bg-gray-700 text-primary-600 dark:text-primary-400 rounded-xl hover:bg-primary-50 dark:hover:bg-gray-600 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105 font-semibold"
-          >
-            <RefreshCw className="w-5 h-5" />
-            <span>Yenile</span>
-          </button>
+          <div className="relative z-20 flex-shrink-0" style={{ isolation: 'isolate' }}>
+            <button
+              onClick={handleRefresh}
+              className="flex items-center gap-2 px-6 py-3 bg-white dark:bg-gray-700 text-primary-600 dark:text-primary-300 rounded-xl border-2 border-gray-200/90 dark:border-gray-600 shadow-lg shadow-black/10 hover:bg-gray-50 dark:hover:bg-gray-600 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 font-semibold"
+            >
+              <RefreshCw className="w-5 h-5" />
+              <span>Yenile</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -294,7 +296,7 @@ const DatabaseManagementPage = () => {
             <h3 className="text-sm font-semibold opacity-90">Farklı Coin</h3>
           </div>
 
-          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-xl p-6 text-white">
+          <div className="bg-primary-600 dark:bg-gray-700 rounded-2xl shadow-xl p-6 text-white">
             <div className="flex items-center justify-between mb-4">
               <Clock className="w-8 h-8 opacity-80" />
               <div className="text-right">

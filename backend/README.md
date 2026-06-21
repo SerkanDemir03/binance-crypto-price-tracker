@@ -34,13 +34,16 @@ DB_USER=postgres
 DB_PASSWORD=12345678
 
 BINANCE_API_URL=https://api.binance.com/api/v3/ticker/price
-TABLE_NAME=tbl_binance2_staj
+TABLE_NAME=tbl_binance2
 
 # Scheduler Configuration (Cron expression)
 # */1 * * * * = every 1 minute
 # */5 * * * * = every 5 minutes
 # 0 * * * * = every hour
 UPDATE_INTERVAL=*/1 * * * *
+
+# Binance erişilemiyorsa (engelli bölge/VPN yok): WebSocket'i kapat, log spam önlenir
+# SKIP_BINANCE_WEBSOCKET=true
 ```
 
 ## 🏃 Running
